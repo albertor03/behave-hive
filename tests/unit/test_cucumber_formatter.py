@@ -107,10 +107,10 @@ def test_structure_direct_use_on_a_directory_with_tags(project):
 
 
 def test_structure_json_is_utf8_without_ascii_escaping(project):
-    project.write("features/a.feature", 'Feature: Café\n  Scenario: s\n    Given value "ok"\n')
+    project.write("features/a.feature", 'Feature: Caf\u00e9\n  Scenario: s\n    Given value "ok"\n')
     raw = (project.root / "out.json")
     run_json(project)
-    assert "Café" in raw.read_text(encoding="utf-8")
+    assert "Caf\u00e9" in raw.read_text(encoding="utf-8")
 
 
 # --- 5.4 ids and tags ------------------------------------------------------------
@@ -124,7 +124,7 @@ def slug(text):
 
 
 def test_ids_feature_id_is_slug_plus_sha256_prefix_of_the_uri(project):
-    project.write("features/Café Login.feature", BASIC)
+    project.write("features/Caf\u00e9 Login.feature", BASIC)
     (feature,) = run_json(project)
     uri = feature["uri"]
     assert slug(uri) == "features-cafe-login-feature"
