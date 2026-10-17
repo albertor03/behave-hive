@@ -348,3 +348,103 @@ def test_missing_allure_is_irrelevant_without_the_allure_format(project, monkeyp
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
     (project / "behave.ini").write_text(ini(formats="cucumber"))
     assert load().formats == ("cucumber",)
+
+
+# --- 3.8 effective behave configuration -----------------------------------------
+
+from behave_hive.config import build_behave_config, validate_effective
+
+
+def effective(args=(), ini_text=None, project=None):
+    if ini_text is not None:
+        (project / "behave.ini").write_text(ini_text)
+    cfg = build_behave_config(list(args))
+    validate_effective(cfg, list(args))
+    return cfg
+
+
+def test_effective_nonexistent_formatter_and_outfiles_are_ignored(project):
+    cfg = effective(ini_text="[behave]\nformat = nonexistent_formatter\noutfiles = x.txt\n", project=project)
+    assert not (project / "x.txt").exists()
+    assert cfg.tag_expression is not None
+
+
+def test_effective_plain_configuration_is_accepted(project):
+    effective(ini_text="[behave]\nlang = es\ndefault_tags = not @wip\n", project=project)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("stop", "true"),
+        ("dry_run", "true"),
+        ("steps_catalog", "true"),
+        ("junit", "true"),
+        ("wip", "true"),
+        ("name", "login"),
+        ("include_re", "login"),
+        ("exclude_re", "login"),
+        ("stage", "staging"),
+        ("runner", "my.module:Runner"),
+    ],
+)
+def test_effective_incompatible_key_in_file_names_key_and_file(project, key, value):
+    with pytest.raises(ConfigError) as exc:
+        effective(ini_text=f"[behave]\n{key} = {value}\n", project=project)
+    assert key in str(exc.value)
+    assert "behave.ini" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "args, key",
+    [
+        (["--steps-catalog"], "steps_catalog"),
+        (["--junit"], "junit"),
+        (["--stop"], "stop"),
+        (["-d"], "dry_run"),
+        (["-w"], "wip"),
+        (["-n", "x"], "name"),
+        (["--name=x"], "name"),
+        (["-i", "x"], "include"),
+        (["-e", "x"], "exclude"),
+        (["--stage", "s"], "stage"),
+        (["-r", "a:B"], "runner"),
+    ],
+)
+def test_effective_incompatible_argument_names_key_and_origin(project, args, key):
+    with pytest.raises(ConfigError) as exc:
+        effective(args)
+    assert key in str(exc.value)
+    assert "argument" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [["--version"], ["--tags-help"], ["--lang-list"], ["--lang-help", "es"], ["--lang", "help"]],
+)
+def test_effective_informational_options_are_rejected(project, args):
+    with pytest.raises(ConfigError, match="informational"):
+        effective(args)
+
+
+def test_effective_argument_beats_file_in_the_reported_origin(project):
+    with pytest.raises(ConfigError) as exc:
+        effective(["--stop"], ini_text="[behave]\nstop = true\n", project=project)
+    assert "argument" in str(exc.value)
+
+
+def test_effective_tags_argument_overrides_default_tags(project):
+    cfg = effective(["--tags=@expected_fail"], ini_text="[behave]\ndefault_tags = not @expected_fail\n", project=project)
+    assert cfg.tag_expression.check(["expected_fail"]) is True
+
+
+# --- 3.9 behave ignores [behave_hive] -------------------------------------------
+
+
+def test_behave_ignores_hive_section(make_project):
+    project = make_project()
+    project.write("features/a.feature", "Feature: F\n  Scenario: S\n    Given value \"ok\"\n")
+    project.write("behave.ini", "[behave]\nlang = en\n\n[behave_hive]\nparallel = true\nworkers = 4\n")
+    result = project.run("behave", "features")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "warning" not in result.stderr.lower()

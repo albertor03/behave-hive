@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from behave.configuration import setup_parser
+from behave.configuration import (
+    Configuration,
+    config_filenames,
+    load_configuration,
+    read_configuration,
+    setup_parser,
+)
 
 from behave_hive.errors import ConfigError
 
@@ -240,3 +246,76 @@ def _validate(values: dict[str, Any]) -> None:
     if "allure" in values["formats"] and importlib.util.find_spec("allure_behave") is None:
         raise ConfigError('format \'allure\' needs allure-behave: pip install "behave-hive[allure]"')
     validate_behave_args(values["behave_args"])
+
+
+# (config attribute, key reported to the user, option strings) in the order they are checked.
+# `wip` goes before `stop` and `steps_catalog` before `dry_run`: behave turns `--wip` into a
+# stop and `--steps-catalog` into a dry run, and the user's option must be the one reported.
+INCOMPATIBLE = (
+    ("wip", "wip", ("-w", "--wip")),
+    ("stop", "stop", ("--stop",)),
+    ("steps_catalog", "steps_catalog", ("--steps-catalog",)),
+    ("dry_run", "dry_run", ("-d", "--dry-run")),
+    ("junit", "junit", ("--junit",)),
+    ("name", "name", ("-n", "--name")),
+    ("include_re", "include_re", ("-i", "--include")),
+    ("exclude_re", "exclude_re", ("-e", "--exclude")),
+    ("stage", "stage", ("--stage",)),
+)
+DEFAULT_RUNNER = "behave.runner:Runner"
+INFORMATIONAL = (
+    ("version", "--version"),
+    ("tags_help", "--tags-help"),
+    ("lang_list", "--lang-list"),
+    ("lang_help", "--lang-help"),
+)
+
+
+def build_behave_config(args: list[str]) -> Configuration:
+    """behave's configuration for `args`, without validating or adding user formatters (D3/D4)."""
+    defaults: dict[str, Any] = {}
+    load_configuration(defaults)
+    defaults.pop("format", None)
+    defaults.pop("outfiles", None)
+    return Configuration(args, load_config=False, **defaults)
+
+
+def _file_origins() -> dict[str, str]:
+    """Which behave configuration file sets each key (the last one read wins)."""
+    origins: dict[str, str] = {}
+    for filename in config_filenames():
+        for key in read_configuration(filename):
+            origins[key] = os.path.normpath(filename)
+    return origins
+
+
+def _in_args(args: list[str], options: tuple[str, ...]) -> bool:
+    return any(
+        token == option or token.startswith(option + "=") or (not option.startswith("--") and token.startswith(option))
+        for token in args
+        for option in options
+    )
+
+
+def validate_effective(cfg: Configuration, args: list[str] | tuple[str, ...] = ()) -> None:
+    """Reject behave settings that change what runs or end behave early (D4)."""
+    args = list(args)
+    origins = _file_origins()
+
+    def origin(attribute: str, options: tuple[str, ...]) -> str:
+        return "argument" if _in_args(args, options) else origins.get(attribute, "the behave configuration")
+
+    for attribute, key, options in INCOMPATIBLE:
+        if getattr(cfg, attribute, None):
+            raise ConfigError(
+                f"behave option '{key}' is not supported by behave-hive (set in {origin(attribute, options)})"
+            )
+    if cfg.runner != DEFAULT_RUNNER:
+        raise ConfigError(
+            f"behave option 'runner' is not supported by behave-hive (set in {origin('runner', ('-r', '--runner'))})"
+        )
+    for attribute, option in INFORMATIONAL:
+        if getattr(cfg, attribute, None):
+            raise ConfigError(f"informational option '{option}' ends behave without running scenarios")
+    if cfg.lang == "help":
+        raise ConfigError("informational option '--lang help' ends behave without running scenarios")
