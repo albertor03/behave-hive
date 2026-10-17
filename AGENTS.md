@@ -43,6 +43,14 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 | Branch coverage, including subprocesses (at least 90%) | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-report=term-missing` |
 | Dependency audit | `.venv/bin/pip-audit --local --skip-editable` |
 
+## Continuous integration and releases
+
+CI has six jobs: `unit` (Linux/macOS, Python 3.11-3.14), `e2e`, `packaging`,
+`quality`, `coverage` and `actionlint`. Every action is pinned to a release commit;
+actionlint is a versioned CLI download with a verified checksum. Read the
+`e2e-reports` and `coverage` artifacts on a failed run (retained for seven days).
+Set `BEHAVE_HIVE_E2E_KEEP` locally to preserve example reports by test name.
+
 ## Conventions
 
 - **Language:** everything versioned is in English: code, identifiers, comments, docstrings, test names, CLI and error messages, HTML report, docs, example data, commit messages and PR descriptions. Non-English test data goes under `tests/fixtures/i18n/` or is written with `\u` escapes.

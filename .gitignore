@@ -16,6 +16,9 @@ coverage.xml
 # behave-hive runtime output
 .behave-hive/
 reports/
+e2e-reports/
+playwright-report/
+coverage.txt
 
 # Local-only planning and agent tooling (not versioned, see AGENTS.md)
 openspec/
