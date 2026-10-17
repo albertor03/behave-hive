@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from behave.parser import parse_file
+from behave.parser import ParserError, parse_file
 
 from behave_hive.config import build_behave_config, validate_effective
-from behave_hive.errors import ConfigError
+from behave_hive.errors import ConfigError, HiveError
 
 SETUP_TAGS = ("setup", "teardown")
 
@@ -45,7 +45,10 @@ def discover_units(inputs: list[Path], behave_args: list[str], *, scheme: str, p
 
     units: list[Unit] = []
     for path in _feature_files(inputs):
-        feature = parse_file(str(path), language=config.lang)
+        try:
+            feature = parse_file(str(path), language=config.lang)
+        except ParserError as exc:
+            raise HiveError(f"cannot parse {path}: {exc}") from None
         scenarios = list(feature.walk_scenarios())
         selected = [s for s in scenarios if s.should_run_with_tags(config.tag_expression)]
         if not selected:
