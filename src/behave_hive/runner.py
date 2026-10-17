@@ -16,7 +16,19 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from behave_hive.batching import Batch
+from behave.exception import ConfigError as BehaveConfigError
+from behave.exception import TagExpressionError
+
+from behave_hive.batching import Batch, effective_workers, make_batches
+from behave_hive.config import HiveConfig, build_behave_config, validate_effective
+from behave_hive.discovery import discover_units
+from behave_hive.errors import ConfigError, HiveError
+from behave_hive.expand import classify_examples, expand_tree
+from behave_hive.html_report import render
+from behave_hive.lock import results_lock
+from behave_hive.merge import merge, to_cucumber
+from behave_hive.roots import PathMap, group_by_root, needs_expansion
+from behave_hive.summary import exit_code, format_summary, summarize
 
 MANAGED = ("cucumber.json", "report.html", "allure-results", "logs", "tmp")
 FAILING = ("failed", "undefined", "pending")
@@ -268,3 +280,116 @@ def remove_tmp(results_dir: Path, run_dir: Path | None) -> None:
     shutil.rmtree(Path(results_dir) / "tmp", ignore_errors=True)
     if run_dir is not None:
         shutil.rmtree(run_dir, ignore_errors=True)
+
+
+# -- the `run` command --------------------------------------------------------------
+
+
+def _feature_files(inputs: list[Path]) -> list[Path]:
+    files: set[Path] = set()
+    for item in inputs:
+        files.update(sorted(item.rglob("*.feature")) if item.is_dir() else [item])
+    return sorted(files)
+
+
+def _examples_report(inputs: list[Path], lang: str) -> list[str]:
+    """`Examples: <i> inline, <c> from CSV` plus the CSV files in use."""
+    inline = csv_tables = 0
+    csv_files: list[str] = []
+    for feature in _feature_files(inputs):
+        for ref in classify_examples(feature.read_text(encoding="utf-8"), lang):
+            if ref.kind == "inline":
+                inline += 1
+                continue
+            csv_tables += 1
+            csv_file = Path(os.path.normpath(feature.parent / ref.csv_path))
+            try:
+                csv_file = csv_file.relative_to(Path.cwd())
+            except ValueError:
+                pass
+            if csv_file.as_posix() not in csv_files:
+                csv_files.append(csv_file.as_posix())
+    return [f"Examples: {inline} inline, {csv_tables} from CSV", *(f"  - {name}" for name in csv_files)]
+
+
+def _write_json_atomically(path: Path, data: object) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False) -> int:
+    """Run the suite described by `cfg`; return the exit code (spec:parallel-runner)."""
+    started = time.monotonic()
+    inputs = []
+    for name in cfg.paths:
+        path = Path(name)
+        if not path.exists():
+            raise HiveError(f"path not found: {name}")
+        inputs.append(path)
+
+    try:
+        behave_config = build_behave_config(list(cfg.behave_args))
+    except (BehaveConfigError, TagExpressionError) as exc:
+        raise ConfigError(f"{exc.__class__.__name__}: {exc}") from None
+    validate_effective(behave_config, list(cfg.behave_args))
+    lang = behave_config.lang or "en"
+
+    roots = group_by_root(inputs)
+    results_dir = cfg.results_dir.resolve()
+    with results_lock(results_dir):
+        clean_managed(results_dir)
+        run_dir = cfg.work_dir.resolve() / f"run-{os.getpid()}-{int(time.time() * 1000)}"
+        try:
+            return _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started)
+        finally:
+            if not keep_tmp:
+                remove_tmp(results_dir, run_dir)
+
+
+def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> int:
+    for line in _examples_report([p for group in roots.values() for p in group], lang):
+        print(line)
+    if cfg.parallel:
+        print(f"Mode: parallel ({cfg.workers} workers, scheme {cfg.scheme})")
+    else:
+        print("Mode: sequential")
+
+    path_map: dict[Path, Path] = {}
+    sources: dict[Path, list] = {}
+    units_by_root: dict[Path, list] = {}
+    for k, (root, group) in enumerate(roots.items()):
+        targets = group
+        if needs_expansion(root, lang):
+            expanded_root = run_dir / "roots" / str(k) / root.name
+            tree = expand_tree(root, expanded_root, lang)
+            expanded_root = expanded_root.resolve()
+            path_map[expanded_root] = root
+            sources.update(tree.sources_by_file)
+            targets = [expanded_root / p.relative_to(root) for p in group]
+        units_by_root[root] = discover_units(
+            targets, list(cfg.behave_args), scheme=cfg.scheme, parallel=cfg.parallel
+        )
+
+    batches = make_batches(units_by_root, cfg.workers, cfg.chunk, cfg.parallel)
+    if not batches:
+        print("No scenarios found")
+        return 0
+
+    jobs = prepare_jobs(batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats)
+    execution = execute_batches(jobs, effective_workers(cfg.workers, cfg.parallel))
+
+    report = merge(execution.partials, PathMap(path_map), sources)
+    if "cucumber" in cfg.formats:
+        _write_json_atomically(results_dir / "cucumber.json", to_cucumber(report))
+    summary = summarize(report)
+    duration = time.monotonic() - started
+    if "html" in cfg.formats:
+        (results_dir / "report.html").write_text(render(report, summary, duration), encoding="utf-8")
+
+    print(format_summary(summary, duration))
+    for outcome in execution.batch_errors:
+        print(f"Batch {outcome.index} error: {outcome.error}")
+    if execution.interrupted:
+        return 130
+    return exit_code(summary, batch_errors=len(execution.batch_errors))
