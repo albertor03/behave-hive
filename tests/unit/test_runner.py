@@ -283,3 +283,24 @@ def test_cleanup_remove_tmp_deletes_the_tmp_dir_and_the_run_dir(tmp_path):
 
 def test_cleanup_remove_tmp_tolerates_missing_paths(tmp_path):
     remove_tmp(tmp_path / "reports", None)
+
+
+# --- 6.12 path_map in the plan ----------------------------------------------------
+
+
+def test_path_map_is_written_to_the_plan(tmp_path):
+    expanded, original = Path("/proj/.behave-hive/run-1/roots/0/features"), Path("/proj/features")
+    plan = json.loads(build_plan(batch(1), tmp_path, [], allure=True, path_map={expanded: original}).read_text())
+    assert plan["path_map"] == {str(expanded): str(original)}
+
+
+def test_path_map_defaults_to_empty(tmp_path):
+    plan = json.loads(build_plan(batch(1), tmp_path, [], allure=False).read_text())
+    assert plan["path_map"] == {}
+
+
+def test_path_map_reaches_every_plan_of_prepare_jobs(tmp_path):
+    expanded, original = Path("/e/features"), Path("/o/features")
+    jobs = prepare_jobs([batch(1), batch(2)], tmp_path, [], allure=False, path_map={expanded: original})
+    for job in jobs:
+        assert json.loads(job.plan_path.read_text())["path_map"] == {str(expanded): str(original)}

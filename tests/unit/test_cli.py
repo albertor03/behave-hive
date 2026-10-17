@@ -353,3 +353,26 @@ def test_exit_code_unparsable_feature_is_2_without_a_traceback(project):
     assert result.returncode == 2
     assert result.stderr.startswith("behave-hive: error: ")
     assert "a.feature" in result.stderr and "Traceback" not in result.stderr
+
+
+def allure_results(project):
+    return [json.loads(p.read_text()) for p in sorted((project.root / "reports" / "allure-results").glob("*-result.json"))]
+
+
+def test_allure_paths_never_mention_the_run_directory(project):
+    csv_project(project)
+    result = hive(project, "run", "--parallel", "-w", "2", "--formats", "allure")
+    assert result.returncode == 0, result.stdout + result.stderr
+    results = allure_results(project)
+    assert len(results) == 6
+    for item in results:
+        assert item["titlePath"] == ["features", "Login"], item["titlePath"]
+
+
+def test_allure_paths_history_ids_do_not_depend_on_the_workers(project):
+    csv_project(project)
+    assert hive(project, "run", "--parallel", "-w", "3", "--formats", "allure").returncode == 0
+    three = sorted(r["historyId"] for r in allure_results(project))
+    assert hive(project, "run", "--parallel", "-w", "1", "--formats", "allure").returncode == 0
+    assert sorted(r["historyId"] for r in allure_results(project)) == three
+    assert len(set(three)) == 6
