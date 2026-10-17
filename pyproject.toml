@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "behave-hive"
+version = "0.1.0"
+description = "behave layer with Karate-style CSV Examples, parallel execution and Allure/Cucumber JSON/HTML reports"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["behave>=1.3,<1.4"]
+
+[project.optional-dependencies]
+allure = ["allure-behave==2.16.2"]
+playwright = ["playwright>=1.40"]
+dev = ["pytest>=8", "jsonschema>=4", "build>=1"]
+
+[project.scripts]
+behave-hive = "behave_hive.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+markers = [
+    "e2e: runs example/ with Playwright (slow, requires chromium)",
+    "packaging: builds and installs the wheel in clean venvs (slow)",
+]

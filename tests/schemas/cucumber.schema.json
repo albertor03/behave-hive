@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cucumber JSON (subset usado por behave-hive)",
+  "type": "array",
+  "items": { "$ref": "#/$defs/feature" },
+  "$defs": {
+    "tag": {
+      "type": "object",
+      "required": ["name", "line"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^@" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["passed", "failed", "skipped", "undefined", "pending"] },
+        "duration": { "type": "integer", "minimum": 0 },
+        "error_message": { "type": "string" }
+      }
+    },
+    "embedding": {
+      "type": "object",
+      "required": ["mime_type", "data"],
+      "properties": {
+        "mime_type": { "type": "string" },
+        "data": { "type": "string", "contentEncoding": "base64" }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "match": { "type": "object", "properties": { "location": { "type": "string" } } },
+        "result": { "$ref": "#/$defs/result" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["keyword", "name", "line", "result"],
+      "properties": {
+        "keyword": { "type": "string", "pattern": " $" },
+        "name": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "match": {
+          "type": "object",
+          "required": ["location"],
+          "properties": { "location": { "type": "string" } }
+        },
+        "result": { "$ref": "#/$defs/result" },
+        "embeddings": { "type": "array", "items": { "$ref": "#/$defs/embedding" } },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["cells"],
+            "properties": { "cells": { "type": "array", "items": { "type": "string" } } }
+          }
+        },
+        "doc_string": {
+          "type": "object",
+          "required": ["value"],
+          "properties": {
+            "value": { "type": "string" },
+            "content_type": { "type": "string" },
+            "line": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "element": {
+      "type": "object",
+      "required": ["keyword", "name", "line", "type", "steps"],
+      "properties": {
+        "id": { "type": "string" },
+        "keyword": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "type": { "enum": ["scenario", "background"] },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/tag" } },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } },
+        "before": { "type": "array", "items": { "$ref": "#/$defs/hook" } },
+        "after": { "type": "array", "items": { "$ref": "#/$defs/hook" } }
+      },
+      "if": { "properties": { "type": { "const": "scenario" } } },
+      "then": { "required": ["id", "tags", "description"] }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["uri", "id", "keyword", "name", "description", "line", "tags", "elements"],
+      "properties": {
+        "uri": { "type": "string" },
+        "id": { "type": "string", "pattern": "^[a-z0-9-]*$" },
+        "keyword": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/tag" } },
+        "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } }
+      }
+    }
+  }
+}

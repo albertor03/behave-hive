@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<body>
+  <form onsubmit="event.preventDefault();
+    var ok = document.getElementById('u').value === 'admin' && document.getElementById('p').value === '1234';
+    document.getElementById('msg').textContent = ok ? 'Welcome' : 'Invalid credentials';">
+    <input id="u" placeholder="user">
+    <input id="p" type="password" placeholder="password">
+    <button id="go">Sign in</button>
+  </form>
+  <p id="msg"></p>
+</body>
+</html>

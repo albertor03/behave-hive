@@ -1,0 +1,16 @@
+# Python / build
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# behave-hive runtime output
+.behave-hive/
+reports/
+
+# Local-only planning and agent tooling (not versioned, see AGENTS.md)
+openspec/
+.claude/
+CLAUDE.md
