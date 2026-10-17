@@ -72,7 +72,13 @@ class ExecutionResult:
 # -- plans --------------------------------------------------------------------------
 
 
-def build_plan(batch: Batch, results_dir: Path, behave_args: list[str], allure: bool) -> Path:
+def build_plan(
+    batch: Batch,
+    results_dir: Path,
+    behave_args: list[str],
+    allure: bool,
+    path_map: dict[Path, Path] | None = None,
+) -> Path:
     """Write the locations file and the JSON plan of `batch`; return the plan path."""
     tmp = Path(results_dir).resolve() / "tmp"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -88,6 +94,7 @@ def build_plan(batch: Batch, results_dir: Path, behave_args: list[str], allure: 
         "behave_args": list(behave_args),
         "cucumber_out": str(tmp / f"batch-{batch.index}.json"),
         "allure_dir": str(tmp / f"allure-batch-{batch.index}") if allure else None,
+        "path_map": {str(expanded): str(original) for expanded, original in (path_map or {}).items()},
     }
     plan_path = tmp / f"batch-{batch.index}.plan.json"
     plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
@@ -98,12 +105,18 @@ def build_command(plan_path: Path) -> list[str]:
     return [sys.executable, "-m", "behave_hive.worker", "--plan", str(plan_path)]
 
 
-def prepare_jobs(batches: list[Batch], results_dir: Path, behave_args: list[str], allure: bool) -> list[Job]:
+def prepare_jobs(
+    batches: list[Batch],
+    results_dir: Path,
+    behave_args: list[str],
+    allure: bool,
+    path_map: dict[Path, Path] | None = None,
+) -> list[Job]:
     results = Path(results_dir).resolve()
     (results / "logs").mkdir(parents=True, exist_ok=True)
     jobs = []
     for batch in batches:
-        plan_path = build_plan(batch, results, behave_args, allure)
+        plan_path = build_plan(batch, results, behave_args, allure, path_map)
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         jobs.append(
             Job(
@@ -376,7 +389,9 @@ def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> in
         print("No scenarios found")
         return 0
 
-    jobs = prepare_jobs(batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats)
+    jobs = prepare_jobs(
+        batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats, path_map=path_map
+    )
     execution = execute_batches(jobs, effective_workers(cfg.workers, cfg.parallel))
 
     report = merge(execution.partials, PathMap(path_map), sources)

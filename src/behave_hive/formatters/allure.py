@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from behave_hive.errors import HiveError
 
 try:
@@ -21,11 +24,38 @@ try:
 except ImportError as exc:  # pragma: no cover - exercised by monkeypatching sys.modules
     raise HiveError('the allure format needs allure-behave: pip install "behave-hive[allure]"') from exc
 
+from behave_hive.roots import PathMap
 from behave_hive.selection import SelectionSnapshot
+
+PATH_MAP_KEY = "behave_hive.path_map"
 
 
 class HiveAllureListener(AllureListener):
-    """Never drops a result and turns hook failures into `broken`."""
+    """Never drops a result, turns hook failures into `broken` and reports original paths."""
+
+    def __init__(self, behave_config):
+        super().__init__(behave_config)
+        raw = json.loads(behave_config.userdata.get(PATH_MAP_KEY) or "{}")
+        self.path_map = PathMap({Path(expanded): Path(original) for expanded, original in raw.items()})
+        self.has_path_map = bool(raw)
+
+    def start_scenario(self, scenario):
+        super().start_scenario(scenario)
+        if self.has_path_map:
+            result = self.logger.get_test(self.current_scenario_uuid)
+            result.titlePath = self._title_path(scenario)
+
+    def _title_path(self, scenario) -> list[str]:
+        """Directory of the original `.feature` (relative to the cwd) followed by the feature name."""
+        cwd = Path.cwd()
+        filename = Path(scenario.filename)
+        absolute = filename if filename.is_absolute() else cwd / filename
+        original = self.path_map.to_original(absolute)
+        try:
+            original = original.relative_to(cwd)
+        except ValueError:
+            pass
+        return [*original.parts[:-1], scenario.feature.name or original.name or scenario.feature.keyword]
 
     def stop_scenario(self, scenario):
         status = scenario_status(scenario)
