@@ -7,3 +7,11 @@ Feature: Login with data from CSV
 
     Examples: valid credentials
       | read('data/login.csv') |
+
+    Examples: written by hand
+      | user  | password | message             |
+      | guest | guest    | Invalid credentials |
+
+    @expected_fail
+    Examples: fails on purpose
+      | read('data/login_fail.csv') |
