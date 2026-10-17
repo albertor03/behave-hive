@@ -184,7 +184,7 @@ def test_ids_outline_row_line_is_the_examples_row_line(project):
 
 
 def test_ids_empty_slug_falls_back_to_scenario(project):
-    project.write("features/a.feature", 'Feature: F\n  Scenario: 日本\n    Given value "ok"\n')
+    project.write("features/a.feature", 'Feature: F\n  Scenario: \u65e5\u672c\n    Given value "ok"\n')
     (scenario,) = scenarios(run_json(project))
     assert scenario["id"].endswith(";scenario-l2")
 
