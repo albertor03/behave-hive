@@ -1,8 +1,10 @@
+import textwrap
 from pathlib import Path
 
 import pytest
 
-from behave_hive.expand import ExamplesRef, classify_examples
+from behave_hive.errors import CsvExamplesError
+from behave_hive.expand import ExamplesRef, RowSource, classify_examples, expand_feature_text
 
 I18N = Path(__file__).parent.parent / "fixtures" / "i18n"
 
@@ -105,12 +107,6 @@ def test_classification_english_keyword_is_ignored_under_another_language():
 
 # --- 2.3 context-aware scanner -------------------------------------------------
 
-import textwrap
-
-from behave_hive.errors import CsvExamplesError
-from behave_hive.expand import expand_feature_text
-
-
 def feature(body: str) -> str:
     return "Feature: F\n  Scenario Outline: S\n    Given value \"<user>\"\n" + textwrap.dedent(body)
 
@@ -178,9 +174,6 @@ def test_extra_rows_after_comment_are_still_rejected():
 
 
 # --- 2.5 expansion -------------------------------------------------------------
-
-from behave_hive.expand import RowSource
-
 
 def csv_file(tmp_path, content="user,password\nadmin,secret\nguest,\n", name="data.csv"):
     (tmp_path / name).write_bytes(content.encode())

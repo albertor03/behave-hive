@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -165,10 +166,8 @@ def _move_allure(job: Job, results_dir: Path) -> None:
 
 
 def _kill_group(pid: int, sig: int) -> None:
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(os.getpgid(pid), sig)
-    except ProcessLookupError:
-        pass
 
 
 def execute_batches(
@@ -197,30 +196,26 @@ def execute_batches(
         outcome = BatchOutcome(job.batch.index, log_path=job.log_path)
         slot = slots.get()
         try:
-            before_launch()
-            with launch_lock:
-                if cancel.is_set():
-                    outcome.interrupted = True
-                    return outcome, None
-                env = {**os.environ, "BEHAVE_HIVE_WORKER": str(slot), "BEHAVE_HIVE_BATCH": str(job.batch.index)}
-                log = open(job.log_path, "wb")
-                try:
+            with ExitStack() as resources:
+                before_launch()
+                with launch_lock:
+                    if cancel.is_set():
+                        outcome.interrupted = True
+                        return outcome, None
+                    env = {**os.environ, "BEHAVE_HIVE_WORKER": str(slot), "BEHAVE_HIVE_BATCH": str(job.batch.index)}
+                    log = resources.enter_context(open(job.log_path, "wb"))
                     proc = popen(
                         build_command(job.plan_path), cwd=str(cwd), stdout=log, stderr=subprocess.STDOUT,
                         start_new_session=True, env=env,
                     )
-                except BaseException:
-                    log.close()
-                    raise
-                procs[job.batch.index] = proc
-            started = time.monotonic()
-            try:
-                outcome.returncode = proc.wait()
-            finally:
-                log.close()
-                procs.pop(job.batch.index, None)
-            outcome.slot = slot
-            outcome.seconds = time.monotonic() - started
+                    procs[job.batch.index] = proc
+                started = time.monotonic()
+                try:
+                    outcome.returncode = proc.wait()
+                finally:
+                    procs.pop(job.batch.index, None)
+                outcome.slot = slot
+                outcome.seconds = time.monotonic() - started
         finally:
             slots.put(slot)
 
@@ -316,10 +311,8 @@ def _examples_report(inputs: list[Path], lang: str) -> list[str]:
                 continue
             csv_tables += 1
             csv_file = Path(os.path.normpath(feature.parent / ref.csv_path))
-            try:
+            with suppress(ValueError):
                 csv_file = csv_file.relative_to(Path.cwd())
-            except ValueError:
-                pass
             if csv_file.as_posix() not in csv_files:
                 csv_files.append(csv_file.as_posix())
     return [f"Examples: {inline} inline, {csv_tables} from CSV", *(f"  - {name}" for name in csv_files)]

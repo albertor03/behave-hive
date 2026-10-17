@@ -1,5 +1,4 @@
 import json
-import os
 import threading
 import time
 from pathlib import Path
@@ -210,7 +209,6 @@ def test_batch_error_missing_json_is_an_error_even_with_rc_0(tmp_path):
 
 
 def test_batch_error_invalid_json(tmp_path):
-    fake = Fake()
     jobs = jobs_for(tmp_path, [batch(1)])
 
     class Corrupt(Fake):

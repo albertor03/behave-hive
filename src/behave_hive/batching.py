@@ -28,10 +28,7 @@ def make_batches(units_by_root: dict[Path, list[Unit]], workers: int, chunk: int
     for root, units in units_by_root.items():
         if not units:
             continue
-        if not parallel:
-            size = len(units)
-        else:
-            size = chunk or math.ceil(len(units) / effective_workers(workers, parallel))
+        size = len(units) if not parallel else chunk or math.ceil(len(units) / effective_workers(workers, parallel))
         for start in range(0, len(units), size):
             batches.append(Batch(len(batches) + 1, root, tuple(units[start:start + size])))
     return batches

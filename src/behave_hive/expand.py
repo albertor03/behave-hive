@@ -215,7 +215,7 @@ def expand_feature_text(text: str, feature_path: Path, lang: str) -> ExpandResul
         indent = ref_line[: len(ref_line) - len(ref_line.lstrip())]
         ending = _line_ending(ref_line)
         separator = ending or file_ending
-        first_line = sum(l.count("\n") for l in out) + 1
+        first_line = sum(line.count("\n") for line in out) + 1
         generated = [indent + _format_row(r) for r in rows]
         for offset, _ in enumerate(rows[1:], start=1):
             sources.append(RowSource(first_line + offset, csv_path, offset + 1))
@@ -264,7 +264,7 @@ def expand_tree(src_root: Path, dst: Path, lang: str) -> TreeResult:
         ):
             continue
         target = dst_resolved / path.relative_to(src)
-        if path.is_symlink() or not path.is_dir() and path.suffix != ".feature":
+        if path.is_symlink() or (not path.is_dir() and path.suffix != ".feature"):
             os.symlink(path.resolve(), target)
         elif path.is_dir():
             target.mkdir(parents=True, exist_ok=True)

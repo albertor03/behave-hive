@@ -37,11 +37,17 @@ def scenario(name="S", status="passed", steps=None, source=None, line=3, tags=()
 
 
 def hook(message):
-    return [{"match": {"location": "environment.py"}, "result": {"status": "failed", "duration": 0, "error_message": message}}]
+    return [{
+        "match": {"location": "environment.py"},
+        "result": {"status": "failed", "duration": 0, "error_message": message},
+    }]
 
 
 def feature(elements, name="Login", uri="features/login.feature"):
-    return {"uri": uri, "id": "f", "keyword": "Feature", "name": name, "description": "", "line": 1, "tags": [], "elements": elements}
+    return {
+        "uri": uri, "id": "f", "keyword": "Feature", "name": name,
+        "description": "", "line": 1, "tags": [], "elements": elements,
+    }
 
 
 def html(features, duration=8.4):
@@ -69,7 +75,10 @@ def test_feature_table_has_total_executed_pass_percentage_and_duration():
 
 
 def test_feature_table_has_a_totals_row():
-    page = html([feature([scenario("A")], name="One"), feature([scenario("B", "failed")], name="Two", uri="features/b.feature")])
+    page = html([
+        feature([scenario("A")], name="One"),
+        feature([scenario("B", "failed")], name="Two", uri="features/b.feature"),
+    ])
     totals = re.search(r'<tr class="totals-row"[^>]*>(.*?)</tr>', page, re.S).group(1)
     text = re.sub(r"<[^>]+>", " ", totals)
     assert "Totals" in text and "2" in text and "50%" in text
@@ -142,7 +151,9 @@ def test_hook_errors_are_shown():
 
 
 def test_image_embeddings_are_shown_inline_in_the_step():
-    page = html([feature([scenario("A", "failed", [step("shot", "failed", error="x", embeddings=[{"mime_type": "image/png", "data": PNG}])])])])
+    page = html([feature([scenario("A", "failed", [
+        step("shot", "failed", error="x", embeddings=[{"mime_type": "image/png", "data": PNG}]),
+    ])])])
     assert f'src="data:image/png;base64,{PNG}"' in page
     assert 'class="zoom"' in page
 
@@ -194,7 +205,10 @@ def test_supports_dark_mode():
 
 def test_names_are_escaped_and_cannot_inject_scripts():
     page = html([feature(
-        [scenario("<script>alert(1)</script>", tags=("@<b>",), steps=[step("<img src=x onerror=1>", "failed", error="<b>x</b>")])],
+        [scenario(
+            "<script>alert(1)</script>", tags=("@<b>",),
+            steps=[step("<img src=x onerror=1>", "failed", error="<b>x</b>")],
+        )],
         name="<script>f</script>",
     )])
     assert "<script>alert" not in page and "<script>f" not in page

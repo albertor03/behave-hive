@@ -1,3 +1,8 @@
+import json
+import subprocess
+import sys
+import time
+
 import pytest
 
 from behave_hive import cli
@@ -59,11 +64,6 @@ def test_expand_csv_error_exits_2_with_message_and_no_traceback(tmp_path, capsys
 
 
 # --- 6.7 run --------------------------------------------------------------------
-
-import json
-import subprocess
-import sys
-import time
 
 CSV_FEATURE = """\
 Feature: Login
@@ -256,7 +256,8 @@ def test_exit_code_error_in_before_all_is_a_batch_error_with_its_log(project):
 def test_exit_code_failed_cleanup_is_1_without_a_batch_error(project):
     project.write(
         "features/steps/cleanup_steps.py",
-        'from behave import given\n\ndef boom():\n    raise RuntimeError("x")\n\n@given("a failing cleanup")\ndef step(context):\n    context.add_cleanup(boom)\n',
+        'from behave import given\n\ndef boom():\n    raise RuntimeError("x")\n\n'
+        '@given("a failing cleanup")\ndef step(context):\n    context.add_cleanup(boom)\n',
     )
     project.write("features/a.feature", "Feature: F\n  Scenario: S\n    Given a failing cleanup\n")
     result = hive(project, "run")
@@ -267,7 +268,8 @@ def test_exit_code_failed_cleanup_is_1_without_a_batch_error(project):
 def test_exit_code_pending_step_in_a_wip_scenario_is_0(project):
     project.write(
         "features/steps/pending_steps.py",
-        'from behave import given\nfrom behave.exception import StepNotImplementedError\n\n@given("a pending step")\ndef step(context):\n    raise StepNotImplementedError("todo")\n',
+        'from behave import given\nfrom behave.exception import StepNotImplementedError\n\n'
+        '@given("a pending step")\ndef step(context):\n    raise StepNotImplementedError("todo")\n',
     )
     project.write("features/a.feature", "Feature: F\n  @wip\n  Scenario: S\n    Given a pending step\n")
     result = hive(project, "run")
@@ -277,7 +279,8 @@ def test_exit_code_pending_step_in_a_wip_scenario_is_0(project):
 def test_exit_code_pending_step_without_wip_is_1(project):
     project.write(
         "features/steps/pending_steps.py",
-        'from behave import given\nfrom behave.exception import StepNotImplementedError\n\n@given("a pending step")\ndef step(context):\n    raise StepNotImplementedError("todo")\n',
+        'from behave import given\nfrom behave.exception import StepNotImplementedError\n\n'
+        '@given("a pending step")\ndef step(context):\n    raise StepNotImplementedError("todo")\n',
     )
     project.write("features/a.feature", "Feature: F\n  Scenario: S\n    Given a pending step\n")
     result = hive(project, "run")
@@ -356,7 +359,8 @@ def test_exit_code_unparsable_feature_is_2_without_a_traceback(project):
 
 
 def allure_results(project):
-    return [json.loads(p.read_text()) for p in sorted((project.root / "reports" / "allure-results").glob("*-result.json"))]
+    paths = sorted((project.root / "reports" / "allure-results").glob("*-result.json"))
+    return [json.loads(p.read_text()) for p in paths]
 
 
 def test_allure_paths_never_mention_the_run_directory(project):

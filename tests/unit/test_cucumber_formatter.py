@@ -2,7 +2,6 @@ import base64
 import hashlib
 import json
 import re
-import textwrap
 from types import SimpleNamespace
 
 import jsonschema
@@ -549,7 +548,9 @@ def test_hooks_cleanup_error_with_passing_steps_is_failed_with_an_after_element(
 
 
 def test_hooks_error_in_before_scenario_adds_a_before_element(project):
-    project.write("features/environment.py", 'def before_scenario(context, scenario):\n    raise RuntimeError("before boom")\n')
+    project.write(
+        "features/environment.py", 'def before_scenario(context, scenario):\n    raise RuntimeError("before boom")\n'
+    )
     project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
     (scenario,) = scenarios(run_json(project))
     assert internal(scenario)["status"] == "failed"
@@ -560,7 +561,9 @@ def test_hooks_error_in_before_scenario_adds_a_before_element(project):
 
 
 def test_hooks_error_in_after_scenario_adds_an_after_element(project):
-    project.write("features/environment.py", 'def after_scenario(context, scenario):\n    raise RuntimeError("after boom")\n')
+    project.write(
+        "features/environment.py", 'def after_scenario(context, scenario):\n    raise RuntimeError("after boom")\n'
+    )
     project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
     (scenario,) = scenarios(run_json(project))
     assert internal(scenario)["status"] == "failed"

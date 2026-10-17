@@ -39,7 +39,8 @@ h1 { font-size: 1.5rem; margin: 0 0 4px; }
 h2 { font-size: 1.05rem; margin: 0 0 8px; }
 h2 small { color: var(--muted); font-weight: normal; margin-left: 8px; }
 .totals { color: var(--muted); margin: 0 0 12px; }
-.statusbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); margin: 0 0 24px; }
+.statusbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--border); margin: 0 0 24px; }
 .statusbar span { display: block; height: 100%; }
 .bg-passed { background: var(--passed); } .bg-failed { background: var(--failed); }
 .bg-undefined { background: var(--undefined); } .bg-pending { background: var(--pending); }
@@ -64,7 +65,8 @@ h2 small { color: var(--muted); font-weight: normal; margin-left: 8px; }
 table.features { width: 100%; border-collapse: collapse; margin: 0 0 24px; font-size: .9rem; }
 table.features th, table.features td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 table.features thead th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
-table.features tr.totals-row th, table.features tr.totals-row td { border-top: 2px solid var(--border); font-weight: 600; }
+table.features tr.totals-row th, table.features tr.totals-row td {
+  border-top: 2px solid var(--border); font-weight: 600; }
 .bar { display: inline-block; vertical-align: middle; width: 90px; height: 8px; background: var(--border);
   border-radius: 4px; overflow: hidden; margin-right: 8px; }
 .bar span { display: block; height: 100%; background: var(--passed); }
@@ -77,7 +79,8 @@ table.features tr.totals-row th, table.features tr.totals-row td { border-top: 2
 .note { color: var(--muted); font-size: .9rem; }
 section.feature { margin: 0 0 24px; }
 section.feature[hidden], details.scenario[hidden] { display: none; }
-details.scenario { background: var(--card); border: 1px solid var(--border); border-radius: 6px; margin: 6px 0; padding: 6px 12px; }
+details.scenario { background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  margin: 6px 0; padding: 6px 12px; }
 details.scenario > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .status { font-weight: 600; text-transform: uppercase; font-size: .72rem; letter-spacing: .03em; }
 .chip { font-size: .75rem; padding: 0 6px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }

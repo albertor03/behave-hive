@@ -38,11 +38,17 @@ def scenario(line, name="S", status="passed", fid=OLD_FID, location=None, tags=N
 
 
 def background(line=2, name="Shared"):
-    return {"keyword": "Background", "name": name, "description": "", "line": line, "type": "background", "steps": [step(line + 1)]}
+    return {
+        "keyword": "Background", "name": name, "description": "", "line": line,
+        "type": "background", "steps": [step(line + 1)],
+    }
 
 
 def feature(uri, elements, fid=OLD_FID, name="F"):
-    return {"uri": uri, "id": fid, "keyword": "Feature", "name": name, "description": "", "line": 1, "tags": [], "elements": elements}
+    return {
+        "uri": uri, "id": fid, "keyword": "Feature", "name": name,
+        "description": "", "line": 1, "tags": [], "elements": elements,
+    }
 
 
 def run(partials, sources=None):
@@ -115,7 +121,10 @@ def test_merge_scenarios_without_background_stay_unpaired():
 
 
 def test_merge_sorts_features_by_uri():
-    partials = [[feature("features/b.feature", [scenario(3)], name="B")], [feature("features/a.feature", [scenario(3)], name="A")]]
+    partials = [
+        [feature("features/b.feature", [scenario(3)], name="B")],
+        [feature("features/a.feature", [scenario(3)], name="A")],
+    ]
     assert [f["uri"] for f in run(partials).features] == ["features/a.feature", "features/b.feature"]
 
 
@@ -127,7 +136,10 @@ def test_merge_keeps_the_metadata_of_the_first_partial():
 
 def test_merge_attaches_the_row_source():
     uri = EXPANDED / "login.feature"
-    sources = {uri: [RowSource(3, CWD / "features" / "data" / "login.csv", 2), RowSource(5, CWD / "features" / "data" / "login.csv", 3)]}
+    sources = {uri: [
+        RowSource(3, CWD / "features" / "data" / "login.csv", 2),
+        RowSource(5, CWD / "features" / "data" / "login.csv", 3),
+    ]}
     (feat,) = run([[feature(str(uri), [scenario(3), scenario(5), scenario(7)])]], sources).features
     assert [e["x-behave-hive"].get("source") for e in feat["elements"]] == [
         {"csv_path": "features/data/login.csv", "csv_row": 2},

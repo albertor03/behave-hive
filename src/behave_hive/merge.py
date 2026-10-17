@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -97,10 +98,8 @@ def merge(
                 source = row_sources.get(scenario["line"])
                 if source is not None:
                     csv_path = _to_original(str(source.csv_path), path_map, cwd)
-                    try:
+                    with suppress(ValueError):
                         csv_path = Path(csv_path).relative_to(cwd).as_posix()
-                    except ValueError:
-                        pass
                     scenario.setdefault(EXTENSION, {})["source"] = {
                         "csv_path": csv_path,
                         "csv_row": source.csv_row,
