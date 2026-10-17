@@ -1,0 +1,19 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - Unreleased
+
+### Added
+
+- **CSV Examples:** a single `| read('data/users.csv') |` or `| data/users.csv |` cell under `Examples:` is replaced by the rows of the CSV. CSV and hand-written tables can live in the same outline; docstrings are never interpreted; every CSV error names the feature, the line, the file and the row. `behave-hive expand SOURCE DEST` writes the expanded tree.
+- **Configuration:** the `[behave_hive]` section of `behave.ini`, `.behaverc`, `setup.cfg`, `tox.ini` or `[tool.behave_hive]` in `pyproject.toml`, with `parallel`, `workers`, `scheme`, `chunk`, `results_dir`, `formats`, `work_dir`, `behave_args` and `paths`; command line overrides; validation of reserved behave arguments and of the effective behave configuration.
+- **Parallel runner:** `behave-hive run` runs the suite sequentially or in parallel, per scenario or per feature, in batches of consecutive units with a slot per process (`BEHAVE_HIVE_WORKER`, `BEHAVE_HIVE_BATCH`), a lock on `results_dir`, Ctrl+C handling and exit codes `0`, `1`, `2` and `130`.
+- **Reports:** consolidated Cucumber JSON with stable ids and tags with their source line, Allure results with one result per selected scenario, and a self-contained HTML report that shows the CSV source of each row. `CucumberJSONFormatter` and `AllureFormatter` are also usable directly with `behave -f`.
+- **Packaging:** installable with `pip` and `uv`, with `allure` and `playwright` extras.
+- **Example:** a Playwright login project with CSV data, run sequentially and in parallel by the end-to-end tests.

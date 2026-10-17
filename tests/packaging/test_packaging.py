@@ -88,3 +88,18 @@ def test_extra_allure_installs_allure_behave_2_16_2(wheel, tmp_path):
     run(venv_executable(venv, "pip"), "install", f"{wheel}[allure]")
     shown = run(venv_executable(venv, "pip"), "show", "allure-behave").stdout
     assert "Version: 2.16.2" in shown
+
+
+def test_wheel_metadata_has_the_readme_the_urls_and_the_classifiers(wheel):
+    import zipfile
+
+    with zipfile.ZipFile(wheel) as zf:
+        (name,) = [n for n in zf.namelist() if n.endswith(".dist-info/METADATA")]
+        metadata = zf.read(name).decode("utf-8")
+    assert "Project-URL: Homepage, https://github.com/albertor03/behave-hive" in metadata
+    assert "Project-URL: Issues, https://github.com/albertor03/behave-hive/issues" in metadata
+    assert "Author: Alberto Zapata" in metadata
+    assert "License-Expression: MIT" in metadata
+    assert "Classifier: Programming Language :: Python :: 3.14" in metadata
+    assert "# behave-hive" in metadata and "Examples from CSV" in metadata
+    assert "Requires-Dist: behave<1.4,>=1.3" in metadata

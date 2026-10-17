@@ -183,6 +183,17 @@ behave-hive run --no-parallel
 behave-hive run -- --tags=@expected_fail
 ```
 
+## Benchmark
+
+Informational. `example/` with a 12-row CSV plus the hand-written row (13 scenarios, each about 0.3 s), median of 3 runs, wall-clock seconds, macOS, Python 3.14, Chromium headless:
+
+| Mode | Time |
+|---|---|
+| `behave-hive run --no-parallel` | 4.7 s |
+| `behave-hive run --parallel -w 4` | 4.0 s |
+
+The time goes into starting Python, behave and Chromium once per process and into the steps themselves, not into behave-hive. With scenarios this short parallelism barely pays off; it matters for suites where the steps dominate.
+
 ## Limitations
 
 - **Lines in expanded features:** rows generated from a CSV, and everything after them in the file, report the lines of the expanded file. The `uri` is the original one and the HTML shows `csv:row`; files without CSV keep their lines.
