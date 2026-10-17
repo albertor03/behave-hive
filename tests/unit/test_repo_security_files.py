@@ -31,3 +31,17 @@ def test_codeql_has_scheduled_python_analysis_and_high_severity_gate():
         "github/codeql-action/analyze@", "wait-for-processing: true", "security_severity_level",
     ):
         assert value in text
+
+
+def test_protection_check_names_match_ci_matrix():
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    script = (ROOT / ".github/scripts/apply_settings.sh").read_text(encoding="utf-8")
+    for job in ("e2e", "packaging", "quality", "coverage", "actionlint"):
+        assert f"  {job}:\n" in ci and f'"{job}"' in script
+    for system in ("ubuntu-latest", "macos-latest"):
+        for version in ("3.11", "3.12", "3.13", "3.14"):
+            assert f'"unit ({system}, {version})"' in script
+    assert 'name: unit (${{ matrix.os }}, ${{ matrix.python-version }})' in ci
+    for setting in ('"enforce_admins":true', '"strict":true', '"allow_force_pushes":false'):
+        assert setting in script
+    assert "deployment-branch-policies" in script and "-f type=tag" in script

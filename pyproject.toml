@@ -72,6 +72,8 @@ max-complexity = 10
 "src/behave_hive/expand.py" = ["C901"]
 "src/behave_hive/merge.py" = ["C901"]
 "src/behave_hive/runner.py" = ["C901"]
+# Release validation invokes only git with fixed options and a fully validated tag.
+".github/scripts/check_release.py" = ["S603", "S607"]
 
 [tool.pylint.main]
 disable = ["all"]
