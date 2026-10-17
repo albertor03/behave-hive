@@ -16,10 +16,63 @@ hard-coded keyword regex with behave.i18n.
 """
 import csv
 import re
+from dataclasses import dataclass
 from pathlib import Path
+
+from behave.i18n import languages
+
+LANGUAGE_RE = re.compile(r"^\s*#\s*language\s*:\s*(?P<lang>\S+)\s*$")
 
 EXAMPLES_RE = re.compile(r"^\s*(Examples|Scenarios|Ejemplos)\s*:", re.IGNORECASE)
 READ_RE = re.compile(r"""^read\(\s*(['"])(?P<path>.+?)\1\s*\)$""")
+
+
+@dataclass(frozen=True)
+class ExamplesRef:
+    """An Examples table found in a feature: `kind` is "csv" or "inline"; `line` is 1-based."""
+
+    kind: str
+    line: int
+    csv_path: str | None
+
+
+def _directive_language(lines: list[str]) -> str | None:
+    """Language from a `# language: xx` directive in the leading non-content lines."""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("#"):
+            return None
+        m = LANGUAGE_RE.match(line)
+        if m:
+            return m.group("lang")
+    return None
+
+
+def _examples_keywords(lang: str) -> tuple[str, ...]:
+    entry = languages.get(lang) or languages["en"]
+    return tuple(entry["examples"])
+
+
+def classify_examples(text: str, lang: str) -> list[ExamplesRef]:
+    """Classify every Examples table of `text` as `csv` or `inline` (D2)."""
+    lines = text.splitlines()
+    keywords = _examples_keywords(_directive_language(lines) or lang)
+    refs = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not any(stripped.startswith(f"{kw}:") for kw in keywords):
+            continue
+        j = i + 1
+        while j < len(lines) and (not lines[j].strip() or lines[j].strip().startswith("#")):
+            j += 1
+        cells = _cells(lines[j]) if j < len(lines) else None
+        if cells is None:
+            continue
+        csv_path = _csv_path_from_cell(cells[0]) if len(cells) == 1 else None
+        refs.append(ExamplesRef("csv" if csv_path else "inline", j + 1, csv_path))
+    return refs
 
 
 def _cells(line):
