@@ -5,6 +5,13 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.ruff_cache/
+
+# Coverage data and reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # behave-hive runtime output
 .behave-hive/
