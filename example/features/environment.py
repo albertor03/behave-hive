@@ -10,6 +10,11 @@ def before_scenario(context, scenario):
     context.page = context.browser.new_page()
 
 
+def after_step(context, step):
+    if step.status == "failed":
+        context.attach("image/png", context.page.screenshot())
+
+
 def after_scenario(context, scenario):
     context.page.close()
 
