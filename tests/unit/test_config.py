@@ -199,3 +199,152 @@ def test_precedence_cli_paths_override_file_paths(project):
 def test_precedence_extra_args_are_appended_after_behave_args(project):
     (project / "behave.ini").write_text(ini(behave_args="-D a=1"))
     assert load(extra=["-D", "b=2"]).behave_args == ("-D", "a=1", "-D", "b=2")
+
+
+# --- 3.5 reserved behave arguments ----------------------------------------------
+
+from behave_hive.config import validate_behave_args
+
+
+@pytest.mark.parametrize(
+    "args, named",
+    [
+        (["features/other.feature"], "features/other.feature"),
+        (["-t", "@a", "features"], "features"),
+        (["@list.txt"], "@list.txt"),
+        (["-f", "pretty"], "-f"),
+        (["-fpretty"], "-f"),
+        (["--format=pretty"], "--format"),
+        (["--format", "pretty"], "--format"),
+        (["-o", "out.txt"], "-o"),
+        (["--outfile=out.txt"], "--outfile"),
+        (["-r", "x:Y"], "-r"),
+        (["--runner", "x:Y"], "--runner"),
+        (["--junit"], "--junit"),
+        (["--junit-directory", "d"], "--junit-directory"),
+        (["--stop"], "--stop"),
+        (["-d"], "-d"),
+        (["--dry-run"], "--dry-run"),
+        (["-i", "x"], "-i"),
+        (["--include=x"], "--include"),
+        (["-e", "x"], "-e"),
+        (["--exclude", "x"], "--exclude"),
+        (["-n", "x"], "-n"),
+        (["--name=x"], "--name"),
+        (["-w"], "-w"),
+        (["--wip"], "--wip"),
+    ],
+)
+def test_reserved_arguments_are_rejected_naming_the_option(args, named):
+    with pytest.raises(ConfigError) as exc:
+        validate_behave_args(args)
+    assert named in str(exc.value)
+
+
+def test_reserved_format_suggests_formats():
+    with pytest.raises(ConfigError, match="formats"):
+        validate_behave_args(["-f", "pretty"])
+
+
+def test_reserved_positional_says_paths_go_before_double_dash():
+    with pytest.raises(ConfigError, match="paths go before `--`"):
+        validate_behave_args(["features/other.feature"])
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-t", "X"],
+        ["-tX"],
+        ["--tags=X"],
+        ["--tags", "@a and not @b"],
+        ["-D", "k=v"],
+        ["-Dk=v"],
+        ["--define", "k=v"],
+        ["--lang", "es"],
+        ["--no-capture"],
+        ["--no-skipped"],
+        ["--color", "-v"],
+        [],
+    ],
+)
+def test_reserved_allowed_arguments_are_accepted(args):
+    validate_behave_args(args)
+
+
+def test_reserved_arguments_from_the_file_and_after_double_dash_are_both_checked(project):
+    (project / "behave.ini").write_text(ini(behave_args="-D a=1"))
+    with pytest.raises(ConfigError, match="--stop"):
+        load(extra=["--stop"])
+    (project / "behave.ini").write_text(ini(behave_args="--stop"))
+    with pytest.raises(ConfigError, match="--stop"):
+        load()
+
+
+# --- 3.6 value validation -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("workers", "0"),
+        ("workers", "-1"),
+        ("chunk", "-1"),
+        ("scheme", "batch"),
+        ("formats", "cucumber, pdf"),
+        ("workers", "many"),
+        ("chunk", "1.5"),
+        ("parallel", "maybe"),
+        ("parallel", "2"),
+    ],
+)
+def test_validation_rejects_invalid_values_naming_key_and_value(project, key, value):
+    (project / "behave.ini").write_text(ini(**{key: value}))
+    with pytest.raises(ConfigError) as exc:
+        load()
+    assert key in str(exc.value)
+    assert value.split(",")[-1].strip() in str(exc.value)
+
+
+def test_validation_toml_wrong_types(project):
+    (project / "pyproject.toml").write_text('[tool.behave_hive]\nparallel = "maybe"\n')
+    with pytest.raises(ConfigError, match="parallel"):
+        load()
+
+
+def test_validation_cli_values_are_validated_too(project):
+    with pytest.raises(ConfigError, match="workers"):
+        load(cli={"workers": 0})
+    with pytest.raises(ConfigError, match="scheme"):
+        load(cli={"scheme": "batch"})
+
+
+@pytest.mark.parametrize("scheme", ["scenario", "feature"])
+@pytest.mark.parametrize("formats", ["allure", "cucumber", "html", "allure cucumber html"])
+def test_validation_accepts_valid_scheme_and_formats(project, scheme, formats, monkeypatch):
+    import importlib.util
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    (project / "behave.ini").write_text(ini(scheme=scheme, formats=formats))
+    assert load().scheme == scheme
+
+
+# --- 3.7 allure -----------------------------------------------------------------
+
+
+def test_missing_allure_suggests_the_extra(project, monkeypatch):
+    import importlib.util
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    (project / "behave.ini").write_text(ini(formats="allure"))
+    with pytest.raises(ConfigError) as exc:
+        load()
+    assert 'pip install "behave-hive[allure]"' in str(exc.value)
+
+
+def test_missing_allure_is_irrelevant_without_the_allure_format(project, monkeypatch):
+    import importlib.util
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    (project / "behave.ini").write_text(ini(formats="cucumber"))
+    assert load().formats == ("cucumber",)

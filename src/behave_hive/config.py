@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import importlib.util
 import os
 import re
 import shlex
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from behave.configuration import setup_parser
+
 from behave_hive.errors import ConfigError
 
 SECTION = "behave_hive"
@@ -18,6 +21,22 @@ INI_FILES = ("behave.ini", ".behaverc", "setup.cfg", "tox.ini")
 PYPROJECT = "pyproject.toml"
 TRUE_VALUES = {"true", "yes", "on", "1"}
 FALSE_VALUES = {"false", "no", "off", "0"}
+SCHEMES = ("scenario", "feature")
+FORMATS = ("allure", "cucumber", "html")
+
+# Options controlled by behave-hive, with the alternative to suggest.
+RESERVED_OPTIONS = {
+    "-f": "use `formats`",
+    "--format": "use `formats`",
+    "-o": "reports go to `results_dir`",
+    "--outfile": "reports go to `results_dir`",
+    "-r": "the runner is controlled by behave-hive",
+    "--runner": "the runner is controlled by behave-hive",
+    "--junit": "use `formats` (JUnit is not supported)",
+    "--junit-directory": "use `formats` (JUnit is not supported)",
+}
+UNSUPPORTED_OPTIONS = ("-d", "--dry-run", "--stop", "-i", "--include", "-e", "--exclude",
+                       "-n", "--name", "-w", "--wip")
 
 
 @dataclass(frozen=True)
@@ -157,8 +176,9 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
     for key, raw in cli.items():
         if raw is None:
             continue
-        values[key] = raw if key in ("parallel", "workers", "chunk") else CONVERTERS[key](key, raw)
+        values[key] = CONVERTERS[key](key, raw) if isinstance(raw, str) else raw
     values["behave_args"] = (*values["behave_args"], *extra_args)
+    _validate(values)
     return HiveConfig(
         parallel=values["parallel"],
         workers=values["workers"],
@@ -171,3 +191,52 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
         paths=tuple(values["paths"]),
         config_file=found,
     )
+
+
+def _options_taking_a_value() -> set[str]:
+    """Option strings of behave's parser that consume the following argument."""
+    taking = set()
+    for action in setup_parser()._actions:
+        if action.option_strings and action.nargs is None:
+            taking.update(action.option_strings)
+    return taking
+
+
+def _reject_option(token: str, option: str) -> ConfigError:
+    if option in RESERVED_OPTIONS:
+        return ConfigError(f"behave argument '{token}' ({option}) is not allowed: {RESERVED_OPTIONS[option]}")
+    return ConfigError(f"behave argument '{token}' ({option}) is not supported by behave-hive")
+
+
+def validate_behave_args(args: list[str] | tuple[str, ...]) -> None:
+    """Reject the behave arguments that behave-hive controls or does not support (D4)."""
+    with_value = _options_taking_a_value()
+    reserved = set(RESERVED_OPTIONS) | set(UNSUPPORTED_OPTIONS)
+    tokens = iter(args)
+    for token in tokens:
+        if token.startswith("--"):
+            option, has_value = token.split("=", 1)[0], "=" in token
+        elif token.startswith("-") and len(token) > 1:
+            option, has_value = token[:2], len(token) > 2
+        else:
+            what = "@file" if token.startswith("@") else "positional argument"
+            raise ConfigError(f"{what} '{token}' is not allowed in behave arguments: paths go before `--`")
+        if option in reserved:
+            raise _reject_option(token, option)
+        if option in with_value and not has_value:
+            next(tokens, None)
+
+
+def _validate(values: dict[str, Any]) -> None:
+    if values["workers"] < 1:
+        raise ConfigError(f"invalid value for 'workers': {values['workers']} (must be >= 1)")
+    if values["chunk"] < 0:
+        raise ConfigError(f"invalid value for 'chunk': {values['chunk']} (must be >= 0)")
+    if values["scheme"] not in SCHEMES:
+        raise ConfigError(f"invalid value for 'scheme': {values['scheme']!r} (use one of {', '.join(SCHEMES)})")
+    for fmt in values["formats"]:
+        if fmt not in FORMATS:
+            raise ConfigError(f"invalid value for 'formats': {fmt!r} (use {', '.join(FORMATS)})")
+    if "allure" in values["formats"] and importlib.util.find_spec("allure_behave") is None:
+        raise ConfigError('format \'allure\' needs allure-behave: pip install "behave-hive[allure]"')
+    validate_behave_args(values["behave_args"])
