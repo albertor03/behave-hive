@@ -1,9 +1,10 @@
 import os
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
 
-from behave_hive.config import HiveConfig, load_config
+from behave_hive.config import HiveConfig, build_behave_config, load_config, validate_behave_args, validate_effective
 from behave_hive.errors import ConfigError
 
 
@@ -42,7 +43,7 @@ def test_defaults_without_any_file(project):
 
 
 def test_defaults_config_is_immutable(project):
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         load().parallel = True
 
 
@@ -96,7 +97,7 @@ def test_lookup_explicit_config_without_section_fails(project):
 
 
 def test_lookup_explicit_config_missing_file_fails(project):
-    with pytest.raises(ConfigError, match="nope.ini"):
+    with pytest.raises(ConfigError, match=r"nope\.ini"):
         load(config_path=project / "nope.ini")
 
 
@@ -202,9 +203,6 @@ def test_precedence_extra_args_are_appended_after_behave_args(project):
 
 
 # --- 3.5 reserved behave arguments ----------------------------------------------
-
-from behave_hive.config import validate_behave_args
-
 
 @pytest.mark.parametrize(
     "args, named",
@@ -352,9 +350,6 @@ def test_missing_allure_is_irrelevant_without_the_allure_format(project, monkeyp
 
 # --- 3.8 effective behave configuration -----------------------------------------
 
-from behave_hive.config import build_behave_config, validate_effective
-
-
 def effective(args=(), ini_text=None, project=None):
     if ini_text is not None:
         (project / "behave.ini").write_text(ini_text)
@@ -434,7 +429,9 @@ def test_effective_argument_beats_file_in_the_reported_origin(project):
 
 
 def test_effective_tags_argument_overrides_default_tags(project):
-    cfg = effective(["--tags=@expected_fail"], ini_text="[behave]\ndefault_tags = not @expected_fail\n", project=project)
+    cfg = effective(
+        ["--tags=@expected_fail"], ini_text="[behave]\ndefault_tags = not @expected_fail\n", project=project
+    )
     assert cfg.tag_expression.check(["expected_fail"]) is True
 
 

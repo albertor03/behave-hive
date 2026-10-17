@@ -38,6 +38,10 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 | Unit tests | `.venv/bin/pytest -m "not e2e and not packaging"` |
 | E2E tests | `.venv/bin/pytest -m e2e` |
 | Packaging tests | `.venv/bin/pytest -m packaging` (requires `uv`) |
+| Lint, complexity and security | `.venv/bin/ruff check src tests` |
+| Source duplication (six matching lines) | `.venv/bin/pylint src` |
+| Branch coverage, including subprocesses (at least 90%) | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-report=term-missing` |
+| Dependency audit | `.venv/bin/pip-audit --local --skip-editable` |
 
 ## Conventions
 
@@ -45,7 +49,7 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 - **Python:** 3.11+, type hints, `pathlib`. No `print` outside `cli.py`, `summary.py` and `runner.py` (progress output).
 - **Errors:** user-facing errors are raised as `HiveError` or a subclass (`errors.py`), never as a raw traceback.
 - **Running behave in tests:** always in a subprocess (`project.run("behave", ...)` from the `make_project` fixture), never in-process, because behave keeps global state.
-- **Dependencies:** none beyond those declared in `pyproject.toml`. `allure-behave` stays pinned to `2.16.2`, because `formatters/allure.py` relies on its internal API.
+- **Dependencies:** none beyond those declared in `pyproject.toml`. Quality tools (ruff, pylint, pytest-cov, coverage and pip-audit) belong in the `dev` extra. `allure-behave` stays pinned to `2.16.2`, because `formatters/allure.py` relies on its internal API.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/), English, imperative mood, for example `feat: add CSV examples scanner` or `fix(merge): keep background before its scenario`.
 
 ## Not versioned

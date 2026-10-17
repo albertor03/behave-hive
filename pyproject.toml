@@ -32,7 +32,10 @@ dependencies = ["behave>=1.3,<1.4"]
 [project.optional-dependencies]
 allure = ["allure-behave==2.16.2"]
 playwright = ["playwright>=1.40"]
-dev = ["pytest>=8", "jsonschema>=4", "build>=1"]
+dev = [
+    "pytest>=8", "jsonschema>=4", "build>=1",
+    "ruff", "pylint", "pytest-cov>=7", "coverage>=7.10", "pip-audit",
+]
 
 [project.urls]
 Homepage = "https://github.com/albertor03/behave-hive"
@@ -51,3 +54,40 @@ markers = [
     "e2e: runs example/ with Playwright (slow, requires chromium)",
     "packaging: builds and installs the wheel in clean venvs (slow)",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "SIM", "UP", "C90", "S", "RUF"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Tests intentionally assert results and launch controlled subprocess commands.
+"tests/**" = ["S101", "S603", "S607"]
+# Temporary baseline complexity debt, removed by harden-and-polish group 4 (US-10).
+"src/behave_hive/expand.py" = ["C901"]
+"src/behave_hive/merge.py" = ["C901"]
+"src/behave_hive/runner.py" = ["C901"]
+
+[tool.pylint.main]
+disable = ["all"]
+enable = ["duplicate-code"]
+
+[tool.pylint.similarities]
+# Pylint uses an exclusive threshold: five rejects six matching non-signature lines.
+min-similarity-lines = 5
+
+[tool.coverage.run]
+branch = true
+source = ["behave_hive"]
+parallel = true
+patch = ["subprocess"]
+sigterm = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true

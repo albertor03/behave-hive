@@ -9,6 +9,7 @@ import os
 import re
 import traceback
 import unicodedata
+from contextlib import suppress
 from pathlib import Path
 
 from behave.formatter.base import Formatter
@@ -30,10 +31,8 @@ def feature_id(uri: str) -> str:
 def relative_uri(filename: str) -> str:
     path = Path(filename)
     if path.is_absolute():
-        try:
+        with suppress(ValueError):
             path = path.relative_to(Path.cwd())
-        except ValueError:
-            pass
     return path.as_posix()
 
 
@@ -237,7 +236,7 @@ class CucumberJSONFormatter(Formatter):
 
     def _step(self, step):
         status = map_status(step.status)
-        result = {"status": status, "duration": int(round((step.duration or 0) * 1e9))}
+        result = {"status": status, "duration": round((step.duration or 0) * 1e9)}
         if status == "failed":
             result["error_message"] = self._error_message(step)
         data = {

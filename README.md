@@ -203,6 +203,24 @@ The time goes into starting Python, behave and Chromium once per process and int
 - **POSIX only:** the runner uses symlinks and process groups; Windows is not supported.
 - **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV.
 
+## Contributing
+
+Install the development tools with `pip install -e ".[dev,allure]"`. Work test-first
+on a feature branch from `develop`; keep versioned content in English.
+
+```bash
+ruff check src tests
+pylint src
+pytest -m "not e2e and not packaging" --cov --cov-report=term-missing
+pip-audit --local --skip-editable
+```
+
+Ruff checks lint, security rules and McCabe complexity (maximum 10). The four
+baseline complexity findings are temporarily excluded in `pyproject.toml` until
+the planned refactor. Pylint rejects duplicated blocks of six matching lines in
+source; `pylint tests` is informational. Coverage includes subprocesses and
+branches and must reach 90%. Tools are declared in the `dev` extra.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

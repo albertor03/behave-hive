@@ -2,13 +2,13 @@
 import base64
 
 import pytest
-from playwright.sync_api import sync_playwright
 
 from behave_hive.html_report import render
 from behave_hive.merge import Report
 from behave_hive.summary import summarize
 
 pytestmark = pytest.mark.e2e
+sync_playwright = pytest.importorskip("playwright.sync_api").sync_playwright
 
 PNG = base64.b64encode(
     base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
@@ -28,7 +28,8 @@ def step(status="passed", error=None, embeddings=None):
 def scenario(name, status, tags=(), steps=None, line=3):
     return {
         "id": f"f;{name}", "keyword": "Scenario", "name": name, "description": "", "line": line, "type": "scenario",
-        "tags": [{"name": t, "line": 1} for t in tags], "steps": steps or [step(status if status != "skipped" else "skipped")],
+        "tags": [{"name": t, "line": 1} for t in tags],
+        "steps": steps or [step(status if status != "skipped" else "skipped")],
         "x-behave-hive": {"status": status, "behave_status": status},
     }
 
@@ -41,7 +42,10 @@ def page(tmp_path):
             "tags": [],
             "elements": [
                 scenario("admin ok", "passed", ("@smoke",), line=3),
-                scenario("admin bad", "failed", ("@smoke", "@web"), [step("failed", "boom", [{"mime_type": "image/png", "data": PNG}])], line=5),
+                scenario(
+                    "admin bad", "failed", ("@smoke", "@web"),
+                    [step("failed", "boom", [{"mime_type": "image/png", "data": PNG}])], line=5,
+                ),
                 scenario("guest ok", "passed", ("@web",), line=7),
             ],
         },

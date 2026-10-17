@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from pathlib import Path
 
 from behave_hive.errors import HiveError
@@ -17,8 +18,8 @@ try:
         scenario_status_details,
     )
     from allure_commons.logger import AllureFileLogger
-    from allure_commons.model2 import StatusDetails
     from allure_commons.model2 import Status as AllureStatus
+    from allure_commons.model2 import StatusDetails
     from allure_commons.utils import get_testplan, now
     from behave.formatter.base import Formatter
 except ImportError as exc:  # pragma: no cover - exercised by monkeypatching sys.modules
@@ -51,10 +52,8 @@ class HiveAllureListener(AllureListener):
         filename = Path(scenario.filename)
         absolute = filename if filename.is_absolute() else cwd / filename
         original = self.path_map.to_original(absolute)
-        try:
+        with suppress(ValueError):
             original = original.relative_to(cwd)
-        except ValueError:
-            pass
         return [*original.parts[:-1], scenario.feature.name or original.name or scenario.feature.keyword]
 
     def stop_scenario(self, scenario):
