@@ -221,6 +221,28 @@ the planned refactor. Pylint rejects duplicated blocks of six matching lines in
 source; `pylint tests` is informational. Coverage includes subprocesses and
 branches and must reach 90%. Tools are declared in the `dev` extra.
 
+### CI jobs and artifacts
+
+The CI workflow runs on pushes and pull requests to `main` and `develop`:
+
+| Job | Purpose |
+| --- | --- |
+| `unit` | Linux and macOS, Python 3.11, 3.12, 3.13 and 3.14 |
+| `e2e` | Chromium example and HTML report interactions |
+| `packaging` | Build and install the wheel with pip and uv |
+| `quality` | Ruff, pylint duplicate-code, pip-audit |
+| `coverage` | Unit suite with subprocess branch coverage >= 90% |
+| `actionlint` | Validate all workflow files and expressions |
+
+Runs have timeouts and superseded CI runs are cancelled. Action references use
+release commit SHAs; pip and Playwright downloads are cached. On a failed run,
+open the run's **Artifacts** section: `e2e-reports` contains the example's HTML,
+Cucumber JSON and Allure results by test name; `coverage` contains `.coverage`,
+`coverage.xml` and `coverage.txt`. Both are retained for seven days, including on
+failure. To preserve example reports locally, set
+`BEHAVE_HIVE_E2E_KEEP=/absolute/path/to/evidence` before running e2e tests.
+Artifacts retain report contents, including inputs, tracebacks and screenshots.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

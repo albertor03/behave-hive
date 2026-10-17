@@ -1,5 +1,6 @@
 """Runs example/ with Playwright through the real CLI (needs chromium)."""
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -13,10 +14,14 @@ EXAMPLE = Path(__file__).resolve().parents[2] / "example"
 
 
 @pytest.fixture
-def example(tmp_path):
+def example(tmp_path, request):
     target = tmp_path / "example"
     shutil.copytree(EXAMPLE, target, ignore=shutil.ignore_patterns("reports", ".behave-hive", "__pycache__"))
-    return target
+    yield target
+    keep = os.environ.get("BEHAVE_HIVE_E2E_KEEP")
+    reports = target / "reports"
+    if keep and reports.is_dir():
+        shutil.copytree(reports, Path(keep) / request.node.name, dirs_exist_ok=True)
 
 
 def hive(example, *args):
@@ -69,3 +74,25 @@ def test_allure_generate_reports_seven_results(example):
     summaries = list(example.rglob("summary.json"))
     assert summaries, generated.stdout
     assert json.loads(summaries[0].read_text(encoding="utf-8"))["stats"]["total"] == 7
+
+
+def test_keep_preserves_reports_when_a_test_fails(tmp_path, monkeypatch):
+    keep = tmp_path / "kept"
+    monkeypatch.setenv("BEHAVE_HIVE_E2E_KEEP", str(keep))
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import importlib.util\n"
+        f"spec = importlib.util.spec_from_file_location('example_fixtures', {str(Path(__file__).resolve())!r})\n"
+        "module = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\n"
+        "example = module.example\n"
+        "def test_forced_failure(example):\n"
+        "    reports = example / 'reports'\n    reports.mkdir()\n"
+        "    (reports / 'report.html').write_text('failure evidence')\n"
+        "    raise AssertionError('deliberate failure')\n", encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", str(probe)], cwd=tmp_path,
+        capture_output=True, text=True, timeout=120,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (keep / "test_forced_failure/report.html").read_text() == "failure evidence"
