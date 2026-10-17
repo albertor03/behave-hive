@@ -243,6 +243,19 @@ failure. To preserve example reports locally, set
 `BEHAVE_HIVE_E2E_KEEP=/absolute/path/to/evidence` before running e2e tests.
 Artifacts retain report contents, including inputs, tracebacks and screenshots.
 
+### Security
+
+CodeQL scans Python on pushes, pull requests and Mondays at 03:17 UTC. Its job
+waits for processing and rejects open high/critical-severity findings on the
+scanned ref. Dependency review rejects high-severity vulnerable dependencies and
+licenses outside the configured allow-list on pull requests. CodeQL and dependency
+review are enabled for public repositories; private repositories skip these jobs
+until the appropriate GitHub security plan is configured.
+
+Dependabot proposes grouped weekly updates for pip and GitHub Actions against
+`develop`. It only proposes patch updates to `allure-behave`, whose internal API
+is used by the formatter. Updates go through the regular pull request checks.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

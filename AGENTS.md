@@ -51,6 +51,7 @@ actionlint is a versioned CLI download with a verified checksum. Read the
 `e2e-reports` and `coverage` artifacts on a failed run (retained for seven days).
 Set `BEHAVE_HIVE_E2E_KEEP` locally to preserve example reports by test name.
 
+CodeQL, dependency review and Dependabot provide repository security checks.
 ## Conventions
 
 - **Language:** everything versioned is in English: code, identifiers, comments, docstrings, test names, CLI and error messages, HTML report, docs, example data, commit messages and PR descriptions. Non-English test data goes under `tests/fixtures/i18n/` or is written with `\u` escapes.
