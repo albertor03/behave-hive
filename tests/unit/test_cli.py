@@ -345,3 +345,11 @@ def test_concurrent_second_run_with_the_same_results_dir_exits_2_and_first_finis
     finally:
         if first.poll() is None:
             first.kill()
+
+
+def test_exit_code_unparsable_feature_is_2_without_a_traceback(project):
+    project.write("features/a.feature", "this is not gherkin\n")
+    result = hive(project, "run")
+    assert result.returncode == 2
+    assert result.stderr.startswith("behave-hive: error: ")
+    assert "a.feature" in result.stderr and "Traceback" not in result.stderr
