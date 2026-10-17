@@ -52,6 +52,11 @@ actionlint is a versioned CLI download with a verified checksum. Read the
 Set `BEHAVE_HIVE_E2E_KEEP` locally to preserve example reports by test name.
 
 CodeQL, dependency review and Dependabot provide repository security checks.
+Release tags run `verify` -> `build` -> `test-install` (pip/uv) -> `publish` ->
+`github-release`. Use the manual dry run before approving a PyPI deployment.
+See README "Releasing" for the exact preparation, protection and recovery steps.
+Repository settings, pushes and publication require the maintainer's explicit approval.
+
 ## Conventions
 
 - **Language:** everything versioned is in English: code, identifiers, comments, docstrings, test names, CLI and error messages, HTML report, docs, example data, commit messages and PR descriptions. Non-English test data goes under `tests/fixtures/i18n/` or is written with `\u` escapes.
