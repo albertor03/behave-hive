@@ -13,11 +13,11 @@ work pending. Implementation is paused. The tracking board is
 
 | Check | Latest verified result |
 | --- | --- |
-| Entire test suite | **643 passed** (626 unit + 17 e2e/packaging) |
-| Unit tests | 626 passed |
-| E2E and packaging tests | 17 passed (12 e2e, 5 packaging with clean pip/uv installs) |
-| Library statements | **1527 / 1527 covered; 0 missing** |
-| Library branches | **482 / 482 covered; 0 missing** |
+| Entire test suite | **648 passed** (630 unit + 18 e2e/packaging) |
+| Unit tests | 630 passed |
+| E2E and packaging tests | 18 passed (12 e2e, 6 packaging with clean pip/uv installs) |
+| Library statements | **1559 / 1559 covered; 0 missing** |
+| Library branches | **468 / 468 covered; 0 missing** |
 | Coverage exclusions | 0 excluded lines; all 20 library Python files included |
 | Quality | Ruff, source pylint duplication and pip-audit pass |
 | Workflow validation | actionlint 1.7.12 and local workflow contract tests pass |
@@ -27,11 +27,8 @@ Coverage includes subprocesses and gates the entire library at exact 100%.
 Statements and branches are separate metrics. Remote Linux/macOS/Python matrix
 runs have not been observed; configured CI is not remote execution evidence.
 
-An isolated complexity measurement still finds `_find_tables` 11,
-`read_csv_rows` 11, `execute_batches` 14 and `_run_locked` 11 (limit 10).
-Configured Ruff passes because the temporary module exceptions remain. HU-10
-must close these current findings as well as its planned refactor; older counts
-and the earlier `merge` finding must not be treated as the current inventory.
+Complexity: after HU-10 no function exceeds 10 and `pyproject.toml` has no `C901`
+exception (details in the change's `baseline.md`, "After HU-10").
 
 Reproduce the full suite with `.venv/bin` on PATH:
 
@@ -61,7 +58,7 @@ the decoded screenshot work with CSP active and no browser console errors.
 | HU-7: original Allure paths and HTML v2 | Implemented and integrated | Error privacy is implemented in HU-9; diagnostics remain HU-11 |
 | HU-8: quality gates | Integrated into develop | Exact-100 strengthening is implemented in HU-16 |
 | HU-9: privacy/security | Tasks 3.1–3.9 done; `/security-review` and `/code-review` ran on 2026-10-18 and confirmed findings are fixed | Fixes after `63d4c4c` are uncommitted; authorized integration |
-| HU-10: refactor | Not implemented | All nine tasks, including removing temporary complexity exceptions |
+| HU-10: refactor | 9/9 tasks done on `feature/us-10-refactor`, uncommitted | Authorized commit and integration |
 | HU-11: diagnostics | Not implemented | All ten tasks, including Allure attachments and environment metadata |
 | HU-12: hardened CI | Implemented and integrated into develop | Real CI, second-run cache and failing-run artifact evidence |
 | HU-13: repository scanning | Implemented and integrated into develop | Real CodeQL/dependency-review execution |
@@ -88,7 +85,7 @@ from complete planning artifacts and from release/integration completion.
 | Change | Checked tasks | Pending |
 | --- | ---: | --- |
 | `add-behave-hive-mvp` | **64/66** | 10.3 real CI and 10.5 approved repository publication |
-| `harden-and-polish-behave-hive` | **26/48** | HU-10, HU-11 and final closure/integration |
+| `harden-and-polish-behave-hive` | **35/48** | HU-11 and final closure/integration |
 | `add-github-actions-pipeline` | **18/24** | Settings/publisher, Trello/integration closure and real CI/release runs |
 | `configure-html-report-name` | **6/6** | Review/integration/archive follow-up |
 | `reach-full-library-coverage` | **16/16** | Review/integration/archive follow-up |
@@ -101,9 +98,8 @@ pending. No change has been archived.
 
 - [x] **HU-9 review:** done on 2026-10-18; see `baseline.md` "Security review".
   Findings 9 and 10 are deferred to HU-10.
-- [ ] **HU-10:** share file discovery/background pairing and test helpers;
-  extract/split execution, expansion and merge; package the HTML template;
-  remove temporary C901 exceptions; complete the `/simplify` review.
+- [x] **HU-10:** done on `feature/us-10-refactor`, `/simplify` included; see
+  `baseline.md` "After HU-10".
 - [ ] **HU-11:** Allure attachments and `environment.properties`; worker/batch
   metadata; run context, wall/scenario time and speedup; failure-first/opened
   scenarios, summary/copy control, log references, outline groups and URL filters;

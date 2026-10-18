@@ -6,7 +6,7 @@ import pytest
 from behave_hive.errors import HiveError
 from behave_hive.expand import RowSource
 from behave_hive.formatters.cucumber import feature_id
-from behave_hive.merge import merge, to_cucumber
+from behave_hive.merge import merge, pair_backgrounds, to_cucumber
 from behave_hive.roots import PathMap
 
 CWD = Path("/proj")
@@ -207,3 +207,13 @@ def test_scrub_error_messages_in_steps_and_both_hooks(monkeypatch):
     assert out["steps"][0]["result"]["error_message"] == expected
     assert out["before"][0]["result"]["error_message"] == expected
     assert out["after"][0]["result"]["error_message"] == expected
+
+
+def test_pair_backgrounds_pairs_a_background_only_with_the_next_scenario():
+    background = {"type": "background", "name": "bg"}
+    first, second, third = ({"type": "scenario", "name": n} for n in "abc")
+    assert pair_backgrounds([background, first, second, third]) == [(background, first), (None, second), (None, third)]
+
+
+def test_pair_backgrounds_of_nothing_is_empty():
+    assert pair_backgrounds([]) == []

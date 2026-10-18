@@ -11,7 +11,8 @@ import pytest
 
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
-from behave_hive.runner import execute_batches, prepare_jobs
+from behave_hive.execution import execute_batches
+from behave_hive.runner import prepare_jobs
 
 
 def test_finished_process_is_not_signalled_during_interrupt(tmp_path):

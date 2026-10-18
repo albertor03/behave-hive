@@ -30,6 +30,11 @@ verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
 - Removed a redundant CLI dispatch fallback after proving the parser accepts
   only the required `run` and `expand` commands.
 
+- Split process execution into `execution.py` (`BatchPool`), shared file discovery and
+  background pairing, split the CSV scanner and merge into small functions, and
+  package the HTML template as `templates/report.html`. No behavior change; the
+  temporary complexity exceptions were removed.
+
 ### Security
 
 - Rewrite expanded, working-directory and home prefixes in merged diagnostics

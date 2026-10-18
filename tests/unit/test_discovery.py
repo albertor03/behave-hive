@@ -40,11 +40,6 @@ def discover(inputs, args=(), scheme="scenario", parallel=True):
     )
 
 
-@pytest.fixture
-def project(make_project):
-    return make_project()
-
-
 # --- 4.1 units ------------------------------------------------------------------
 
 

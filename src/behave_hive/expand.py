@@ -17,6 +17,7 @@ import csv
 import os
 import re
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -108,6 +109,29 @@ class _Table:
     csv_path: str | None
 
 
+def _skip_blank_or_comment(lines: list[str], start: int) -> int:
+    index = start
+    while index < len(lines) and _is_blank_or_comment(lines[index]):
+        index += 1
+    return index
+
+
+def _table_after(lines: list[str], keyword_line: int, feature: Path | None) -> _Table | None:
+    """The table whose first row follows the `Examples:` line, or None when it has no rows."""
+    first = _skip_blank_or_comment(lines, keyword_line + 1)
+    cells = _cells(lines[first]) if first < len(lines) else None
+    if cells is None:
+        return None
+    csv_path = _csv_path_from_cell(cells[0]) if len(cells) == 1 else None
+    if csv_path:
+        after = _skip_blank_or_comment(lines, first + 1)
+        if after < len(lines) and lines[after].strip().startswith("|"):
+            raise CsvExamplesError(
+                "a CSV reference does not allow additional rows", feature=feature, line=first + 1
+            )
+    return _Table("csv" if csv_path else "inline", first, csv_path)
+
+
 def _find_tables(lines: list[str], lang: str, feature: Path | None = None) -> list[_Table]:
     """Context-aware scan: docstring contents are never interpreted (D2)."""
     keywords = _examples_keywords(_directive_language(lines) or lang)
@@ -122,24 +146,10 @@ def _find_tables(lines: list[str], lang: str, feature: Path | None = None) -> li
         elif stripped.startswith(DOCSTRING_DELIMITERS):
             delimiter = stripped[:3]
         elif any(stripped.startswith(f"{kw}:") for kw in keywords):
-            j = i + 1
-            while j < len(lines) and _is_blank_or_comment(lines[j]):
-                j += 1
-            cells = _cells(lines[j]) if j < len(lines) else None
-            if cells is not None:
-                csv_path = _csv_path_from_cell(cells[0]) if len(cells) == 1 else None
-                if csv_path:
-                    k = j + 1
-                    while k < len(lines) and _is_blank_or_comment(lines[k]):
-                        k += 1
-                    if k < len(lines) and lines[k].strip().startswith("|"):
-                        raise CsvExamplesError(
-                            "a CSV reference does not allow additional rows",
-                            feature=feature,
-                            line=j + 1,
-                        )
-                tables.append(_Table("csv" if csv_path else "inline", j, csv_path))
-                i = j
+            table = _table_after(lines, i, feature)
+            if table is not None:
+                tables.append(table)
+                i = table.row
         i += 1
     return tables
 
@@ -148,6 +158,37 @@ def classify_examples(text: str, lang: str) -> list[ExamplesRef]:
     """Classify every Examples table of `text` as `csv` or `inline` (D2)."""
     lines = text.splitlines(keepends=True)
     return [ExamplesRef(t.kind, t.row + 1, t.csv_path) for t in _find_tables(lines, lang)]
+
+
+def _load_csv(csv_path: Path, error: Callable[..., CsvExamplesError]) -> list[list[str]]:
+    try:
+        with open(csv_path, encoding="utf-8-sig", newline="") as f:
+            return [r for r in csv.reader(f) if r]
+    except FileNotFoundError:
+        raise error("Examples CSV not found") from None
+    except UnicodeDecodeError:
+        raise error("Examples CSV is not valid UTF-8") from None
+    except (OSError, csv.Error) as exc:
+        raise error(f"cannot read Examples CSV: {exc}") from None
+
+
+def _validate_header(rows: list[list[str]], error: Callable[..., CsvExamplesError]) -> list[str]:
+    if len(rows) < 2:
+        raise error("Examples CSV needs a header and at least one data row", 1 if rows else None)
+    header = [c.strip() for c in rows[0]]
+    if "" in header:
+        raise error("empty header", 1)
+    if len(set(header)) != len(header):
+        raise error("duplicated header", 1)
+    return header
+
+
+def _validate_rows(rows: list[list[str]], width: int, error: Callable[..., CsvExamplesError]) -> None:
+    for number, row in enumerate(rows, start=1):
+        if len(row) != width:
+            raise error(f"row has {len(row)} cells, the header has {width}", number)
+        if any("\r" in c or "\n" in c for c in row):
+            raise error("a cell contains a line break", number)
 
 
 def read_csv_rows(csv_path: Path, *, feature: Path | None = None, line: int | None = None) -> list[list[str]]:
@@ -160,28 +201,9 @@ def read_csv_rows(csv_path: Path, *, feature: Path | None = None, line: int | No
     def error(message: str, row: int | None = None) -> CsvExamplesError:
         return CsvExamplesError(message, feature=feature, line=line, csv_path=csv_path, csv_row=row)
 
-    try:
-        with open(csv_path, encoding="utf-8-sig", newline="") as f:
-            rows = [r for r in csv.reader(f) if r]
-    except FileNotFoundError:
-        raise error("Examples CSV not found") from None
-    except UnicodeDecodeError:
-        raise error("Examples CSV is not valid UTF-8") from None
-    except (OSError, csv.Error) as exc:
-        raise error(f"cannot read Examples CSV: {exc}") from None
-
-    if len(rows) < 2:
-        raise error("Examples CSV needs a header and at least one data row", 1 if rows else None)
-    header = [c.strip() for c in rows[0]]
-    if "" in header:
-        raise error("empty header", 1)
-    if len(set(header)) != len(header):
-        raise error("duplicated header", 1)
-    for number, row in enumerate(rows, start=1):
-        if len(row) != len(header):
-            raise error(f"row has {len(row)} cells, the header has {len(header)}", number)
-        if any("\r" in c or "\n" in c for c in row):
-            raise error("a cell contains a line break", number)
+    rows = _load_csv(csv_path, error)
+    header = _validate_header(rows, error)
+    _validate_rows(rows, len(header), error)
     return rows
 
 

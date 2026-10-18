@@ -89,3 +89,9 @@ def make_project(tmp_path, monkeypatch):
 def cucumber_schema():
     import json
     return json.loads((Path(__file__).parent / "schemas" / "cucumber.schema.json").read_text())
+
+
+@pytest.fixture
+def project(make_project):
+    """A fresh behave project; modules needing seeded files override this fixture."""
+    return make_project()

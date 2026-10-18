@@ -103,3 +103,10 @@ def test_wheel_metadata_has_the_readme_the_urls_and_the_classifiers(wheel):
     assert "Classifier: Programming Language :: Python :: 3.14" in metadata
     assert "# behave-hive" in metadata and "Examples from CSV" in metadata
     assert "Requires-Dist: behave<1.4,>=1.3" in metadata
+
+
+def test_wheel_contains_the_html_report_template(wheel):
+    import zipfile
+
+    with zipfile.ZipFile(wheel) as zf:
+        assert "behave_hive/templates/report.html" in zf.namelist()

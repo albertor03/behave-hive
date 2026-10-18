@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 
 from behave_hive.errors import HiveError
-from behave_hive.roots import PathMap, find_root, group_by_root, needs_expansion
+from behave_hive.roots import PathMap, feature_files, find_root, group_by_root, needs_expansion
 
 
 @pytest.fixture
@@ -90,3 +92,14 @@ def test_path_map_leaves_unrelated_paths_and_sibling_prefixes_alone(tmp_path):
     sibling = tmp_path / "work" / "features-extra" / "x.feature"
     assert pm.to_original(sibling) == sibling
     assert pm.to_original("/elsewhere/x.feature") == "/elsewhere/x.feature"
+
+
+def test_feature_files_lists_directories_recursively_sorted_and_without_duplicates(tree):
+    login = tree / "auth" / "login.feature"
+    files = feature_files([tree, login])
+    assert files == sorted({login.resolve(), *(p.resolve() for p in tree.rglob("*.feature"))})
+
+
+def test_feature_files_keeps_a_single_file_input_and_resolves_it(tree, monkeypatch):
+    monkeypatch.chdir(tree)
+    assert feature_files([Path("auth/login.feature")]) == [(tree / "auth" / "login.feature").resolve()]
