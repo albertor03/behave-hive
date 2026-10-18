@@ -13,7 +13,7 @@ Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read
 
 Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without data-file cells runs exactly as it does with behave. behave-hive complements behave; if you only need a parallel runner with its own report, [BehaveX](https://github.com/hrcorval/behavex) is another option.
 
-**Contents:** [Installation](#installation) · [Quick start](#quick-start) · [Examples from CSV](#examples-from-csv) · [Running](#running) · [Configuration](#configuration) · [Reports](#reports) · [Examples](#examples) · [Limitations](#limitations) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Releasing](#releasing)
+**Contents:** [Installation](#installation) · [Quick start](#quick-start) · [Examples from CSV and JSON](#examples-from-csv-and-json) · [Running](#running) · [Configuration](#configuration) · [Reports](#reports) · [Examples](#examples) · [Limitations](#limitations) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Releasing](#releasing)
 
 ## Installation
 
@@ -70,7 +70,7 @@ batch 2 · worker 2 · 1 scenario · passed · 1.6s
 
 Open `report.html` (project root by default) for the result; the Cucumber JSON, Allure results and logs are in `reports/`. The steps used here are in [`example/`](https://github.com/albertor03/behave-hive/tree/main/example/), which runs as is.
 
-## Examples from CSV
+## Examples from CSV and JSON
 
 ```gherkin
 Feature: Login

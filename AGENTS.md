@@ -74,7 +74,7 @@ A change is done when all of these hold, and you report the real output, not a s
 - `ruff check src tests` is clean (complexity at most 10, no exceptions) and `pylint src` is 10/10;
 - the CI `coverage` job, which combines the Linux and Windows runs, shows `missing_lines` and `missing_branches` both zero and no excluded lines; a local run on macOS or Linux may miss only the `os.name == "nt"` code. Report statement and branch counts separately; the combined percentage is not branch coverage. Every module of `src/behave_hive` stays in the denominator; never add `omit` or exclusion patterns to reach the gate;
 - `pip-audit` reports no vulnerabilities;
-- README, CHANGELOG and `example/` are updated when behavior a user can see changes.
+- README, CHANGELOG and `example/` are updated when behavior a user can see changes. Before a release, reread the whole README (features, section titles, table of contents, limitations, screenshots) against the CHANGELOG: it becomes the PyPI page and cannot be edited afterwards.
 
 ## Conventions
 
