@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-18
+
 ### Fixed
 
+- **Windows:** Ctrl+C was ignored until every running batch finished; the runner now waits in short steps so the interrupt stops the run right away.
 - **Windows:** runs in a directory whose path has non-ASCII characters (an accented user name, for example) no longer fail. behave read the batch locations with the system code page; the worker now reads them as UTF-8 and passes them to behave directly.
 - **HTML report:** with a filter active, an outline group shows how many of its rows are visible (`2 of 3 rows`).
 

@@ -199,7 +199,7 @@ behave-hive run --parallel --scheme feature -w 2     # one process per feature, 
 
 The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `chunk`); [`example/configs/`](https://github.com/albertor03/behave-hive/tree/main/example/configs/) has a ready-made file for each case. A scenario's own steps never run in parallel. `chunk` sets how many units each process receives (`0` shares them evenly). `before_all` and `after_all` in `environment.py` run once per process, so use [`BEHAVE_HIVE_WORKER`](#worker-identification) to keep ports or users apart.
 
-Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or CSV error, `130` interrupted with Ctrl+C. When nothing matches, `No scenarios found` is printed and the exit code is 0.
+Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or data file (CSV or JSON) error, `130` interrupted with Ctrl+C (or Ctrl+Break on Windows). When nothing matches, `No scenarios found` is printed and the exit code is 0.
 
 ## Configuration
 
