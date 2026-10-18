@@ -173,3 +173,9 @@ def test_csv_forms_cover_plain_path_and_both_read_quotes(example):
         "read() with single quotes - other",
     ]
     assert len(found) == 6
+
+
+def test_forced_failure_to_verify_ci_artifacts(example):
+    """Temporary: fails on purpose so CI uploads the e2e-reports artifact. Never merged."""
+    assert hive(example, "--parallel").returncode == 0
+    raise AssertionError("deliberate failure to check the e2e-reports artifact")
