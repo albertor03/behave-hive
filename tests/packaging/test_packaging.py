@@ -50,7 +50,8 @@ def features(tmp_path):
 
 
 def venv_executable(venv: Path, name: str) -> Path:
-    return venv / ("Scripts" if os.name == "nt" else "bin") / name
+    # uv wants the real file name of the interpreter, with .exe on Windows
+    return venv / "Scripts" / f"{name}.exe" if os.name == "nt" else venv / "bin" / name
 
 
 def project_version() -> str:

@@ -77,5 +77,11 @@ def test_scrub_rewrites_windows_paths_in_any_spelling(text, expected):
     assert "ana" not in scrub(text, WIN_CWD, WIN_HOME).replace("ana2", "")
 
 
+def test_scrub_windows_traceback_paths_relative_to_the_project_use_forward_slashes():
+    text = 'File "features\\steps\\login.py", line 11, in step\n  File "features\\\\steps\\\\b.py", line 2'
+    expected = 'File "features/steps/login.py", line 11, in step\n  File "features/steps/b.py", line 2'
+    assert scrub(text, WIN_CWD, WIN_HOME) == expected
+
+
 def test_scrub_windows_without_a_home_directory():
     assert scrub(r"C:\Users\ana\project\a.py C:\Users\ana\x.py", WIN_CWD, None) == r"a.py C:\Users\ana\x.py"

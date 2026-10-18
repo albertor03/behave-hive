@@ -94,12 +94,13 @@ jobs:
           INSTALLER: ${{ matrix.installer }}
           VERSION: ${{ needs.build.outputs.version }}
           BIN: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
+          EXE: ${{ matrix.os == 'windows-latest' && '.exe' || '' }}
         run: |
           python -m venv .venv-release
           if [[ "$INSTALLER" == pip ]]; then
             ".venv-release/$BIN/python" -m pip install dist/*.whl
           else
-            uv pip install --python ".venv-release/$BIN/python" dist/*.whl
+            uv pip install --python ".venv-release/$BIN/python$EXE" dist/*.whl
           fi
           test "$(".venv-release/$BIN/behave-hive" --version | tr -d '\r')" = "behave-hive $VERSION"
 

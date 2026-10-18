@@ -34,6 +34,8 @@ def _with_forward_slashes(text: str, path: PurePath | None) -> str:
 def scrub(text: str, cwd: PurePath, home: PurePath | None) -> str:
     """Replace whole path prefixes, longest first, without rewriting unrelated text."""
     text = _with_forward_slashes(_with_forward_slashes(text, cwd), home)
+    if isinstance(cwd, PureWindowsPath):
+        text = re.sub(r'(?<=File ")[^"]+', lambda match: re.sub(r"\\{1,2}", "/", match[0]), text)
     replacements = {home.as_posix(): "~"} if home is not None else {}
     replacements[cwd.as_posix()] = "."
     prefixes = "|".join(re.escape(p) for p in sorted(replacements, key=len, reverse=True))
