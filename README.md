@@ -1,5 +1,10 @@
 # behave-hive
 
+[![CI](https://github.com/albertor03/behave-hive/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/albertor03/behave-hive/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/behave-hive)](https://pypi.org/project/behave-hive/)
+[![Python versions](https://img.shields.io/pypi/pyversions/behave-hive)](https://pypi.org/project/behave-hive/)
+[![License](https://img.shields.io/github/license/albertor03/behave-hive)](https://github.com/albertor03/behave-hive/blob/main/LICENSE)
+
 Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read `Examples:` from CSV files and get Allure, Cucumber JSON and HTML reports in one run.
 
 - **Examples from CSV:** point an `Examples:` table at a file with its path, `| data/users.csv |`, or the equivalent `| read('data/users.csv') |`. CSV and hand-written tables can live in the same outline.
@@ -61,9 +66,9 @@ batch 2 · worker 2 · 1 scenario · passed · 1.6s
 1 feature · 2 scenarios (2 passed) · 6 steps (6 passed) · 1.7s
 ```
 
-![HTML report overview: status, run context, durations and the feature table](docs/images/report-overview.png)
+![HTML report overview: status, run context, durations and the feature table](https://raw.githubusercontent.com/albertor03/behave-hive/main/docs/images/report-overview.png)
 
-Open `report.html` (project root by default) for the result; the Cucumber JSON, Allure results and logs are in `reports/`. The steps used here are in [`example/`](example/), which runs as is.
+Open `report.html` (project root by default) for the result; the Cucumber JSON, Allure results and logs are in `reports/`. The steps used here are in [`example/`](https://github.com/albertor03/behave-hive/tree/main/example/), which runs as is.
 
 ## Examples from CSV
 
@@ -170,7 +175,7 @@ behave-hive run --parallel --scheme scenario -w 4    # rows and scenarios spread
 behave-hive run --parallel --scheme feature -w 2     # one process per feature, 2 at a time
 ```
 
-The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `chunk`); [`example/configs/`](example/configs/) has a ready-made file for each case. A scenario's own steps never run in parallel. `chunk` sets how many units each process receives (`0` shares them evenly). `before_all` and `after_all` in `environment.py` run once per process, so use [`BEHAVE_HIVE_WORKER`](#worker-identification) to keep ports or users apart.
+The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `chunk`); [`example/configs/`](https://github.com/albertor03/behave-hive/tree/main/example/configs/) has a ready-made file for each case. A scenario's own steps never run in parallel. `chunk` sets how many units each process receives (`0` shares them evenly). `before_all` and `after_all` in `environment.py` run once per process, so use [`BEHAVE_HIVE_WORKER`](#worker-identification) to keep ports or users apart.
 
 Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or CSV error, `130` interrupted with Ctrl+C. When nothing matches, `No scenarios found` is printed and the exit code is 0.
 
@@ -280,11 +285,11 @@ versions, `mode` (`parallel` or `sequential`), `workers` and `scheme`.
 
 A failed scenario opens with its error headline, a **Copy error** button, the worker and batch that ran it, and the screenshot taken by your `after_step` hook (the traceback below the steps is hidden in this picture):
 
-![A failed scenario with its steps and the screenshot attached to the failed step](docs/images/report-failure.png)
+![A failed scenario with its steps and the screenshot attached to the failed step](https://raw.githubusercontent.com/albertor03/behave-hive/main/docs/images/report-failure.png)
 
 Filters live in the address, so a filtered view can be shared; `#status=passed&tag=@smoke` shows this:
 
-![The toolbar with the status and tag filters applied and one matching scenario](docs/images/report-filters.png)
+![The toolbar with the status and tag filters applied and one matching scenario](https://raw.githubusercontent.com/albertor03/behave-hive/main/docs/images/report-filters.png)
 
 ### Privacy and security of the HTML
 
@@ -302,17 +307,17 @@ behave features -f behave_hive.formatters.cucumber:CucumberJSONFormatter -o out.
 
 ## Examples
 
-[`example/`](example/) is a runnable project (Playwright and a local login page) with one example for each feature. Its [README](example/README.md) lists them with the command to run each one.
+[`example/`](https://github.com/albertor03/behave-hive/tree/main/example/) is a runnable project (Playwright and a local login page) with one example for each feature. Its [README](https://github.com/albertor03/behave-hive/blob/main/example/README.md) lists them with the command to run each one.
 
 | Example | Shows |
 |---|---|
-| [`features/login.feature`](example/features/login.feature) | CSV table, hand-written table and a table that fails on purpose (screenshot as evidence). |
-| [`features/csv/forms.feature`](example/features/csv/forms.feature) | The plain path (the default form), `read('...')` with single and double quotes, and a shared file through `..`. |
-| [`features/csv/mixed_and_tagged.feature`](example/features/csv/mixed_and_tagged.feature) | CSV (plain path and `read()`) and hand-written tables in one outline, each with its own tags. |
-| [`features/csv/special_characters.feature`](example/features/csv/special_characters.feature) | Pipes, commas and percent signs inside cells. |
-| [`features/structure/background_and_rule.feature`](example/features/structure/background_and_rule.feature) | `Background` and `Rule` with CSV `Examples:`. |
-| [`features/structure/step_data.feature`](example/features/structure/step_data.feature) | Step tables and docstrings, never read as `Examples:`. |
-| [`configs/`](example/configs/) | Sequential, `scheme = feature` and TOML configurations. |
+| [`features/login.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/login.feature) | CSV table, hand-written table and a table that fails on purpose (screenshot as evidence). |
+| [`features/csv/forms.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/forms.feature) | The plain path (the default form), `read('...')` with single and double quotes, and a shared file through `..`. |
+| [`features/csv/mixed_and_tagged.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/mixed_and_tagged.feature) | CSV (plain path and `read()`) and hand-written tables in one outline, each with its own tags. |
+| [`features/csv/special_characters.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/special_characters.feature) | Pipes, commas and percent signs inside cells. |
+| [`features/structure/background_and_rule.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/structure/background_and_rule.feature) | `Background` and `Rule` with CSV `Examples:`. |
+| [`features/structure/step_data.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/structure/step_data.feature) | Step tables and docstrings, never read as `Examples:`. |
+| [`configs/`](https://github.com/albertor03/behave-hive/tree/main/example/configs/) | Sequential, `scheme = feature` and TOML configurations. |
 
 ```bash
 git clone https://github.com/albertor03/behave-hive && cd behave-hive/example
@@ -323,7 +328,7 @@ uv run behave-hive run --config configs/sequential.ini
 uv run behave-hive run -- --tags=@smoke              # only the @smoke Examples table
 ```
 
-Gherkin in other languages works too: the `Examples:` keyword follows the feature's language, as shown in [`tests/fixtures/i18n/`](tests/fixtures/i18n/).
+Gherkin in other languages works too: the `Examples:` keyword follows the feature's language, as shown in [`tests/fixtures/i18n/`](https://github.com/albertor03/behave-hive/tree/main/tests/fixtures/i18n/).
 
 ## Limitations
 
@@ -356,12 +361,12 @@ Next on the list:
 
 ## Contributing
 
-Pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to set up the project, the checks that must pass and how CI works. [AGENTS.md](AGENTS.md) describes the layout and the conventions.
+Pull requests are welcome. [CONTRIBUTING.md](https://github.com/albertor03/behave-hive/blob/main/CONTRIBUTING.md) explains how to set up the project, the checks that must pass and how CI works. [AGENTS.md](https://github.com/albertor03/behave-hive/blob/main/AGENTS.md) describes the layout and the conventions.
 
 ## Releasing
 
-Releases are tagged and published to PyPI by a workflow; the maintainer's checklist is in [docs/RELEASING.md](docs/RELEASING.md).
+Releases are tagged and published to PyPI by a workflow; the maintainer's checklist is in [docs/RELEASING.md](https://github.com/albertor03/behave-hive/blob/main/docs/RELEASING.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/albertor03/behave-hive/blob/main/LICENSE).
