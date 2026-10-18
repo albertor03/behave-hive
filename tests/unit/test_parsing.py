@@ -1,4 +1,5 @@
 import inspect
+import shutil
 from pathlib import Path
 
 import behave.parser
@@ -7,6 +8,8 @@ import pytest
 
 from behave_hive import parsing
 from behave_hive.errors import ExamplesDataError
+
+I18N = Path(__file__).parent.parent / "fixtures" / "i18n"
 
 OUTLINE = (
     "Feature: F\n"
@@ -47,14 +50,11 @@ def test_parse_expanded_keeps_a_feature_without_data_tables(tmp_path):
 
 
 def test_parse_expanded_uses_the_language_of_the_feature(tmp_path):
-    (tmp_path / "data.csv").write_text("v\none\n", encoding="utf-8")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "users.csv").write_text("user\none\ntwo\n", encoding="utf-8")
     path = tmp_path / "es.feature"
-    path.write_text(
-        "# language: es\nCaracterística: F\n  Esquema del escenario: S\n    Dado value \"<v>\"\n\n"
-        "    Ejemplos:\n      | data.csv |\n",
-        encoding="utf-8",
-    )
-    assert len(list(parsing.parse_expanded(str(path)).walk_scenarios())) == 1
+    shutil.copy(I18N / "es_csv.feature", path)
+    assert len(list(parsing.parse_expanded(str(path)).walk_scenarios())) == 2
 
 
 def test_parse_expanded_reports_a_bad_data_file_as_a_hive_error(tmp_path):

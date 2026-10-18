@@ -78,7 +78,7 @@ def test_fail_expected_failure_has_an_error_message_and_a_screenshot(example):
 def test_allure_generate_reports_every_result(example):
     assert hive(example, "--parallel").returncode == 0
     generated = subprocess.run(
-        ["npx", "--yes", "allure@3", "generate", "reports/allure-results"],
+        [shutil.which("npx"), "--yes", "allure@3", "generate", "reports/allure-results"],
         cwd=example, capture_output=True, text=True, timeout=600,
     )
     assert generated.returncode == 0, generated.stdout + generated.stderr

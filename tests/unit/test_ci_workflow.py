@@ -1,7 +1,6 @@
 """Contract for the quality and coverage jobs; extended by the Actions change."""
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -115,6 +114,7 @@ def test_ci_counter_check_uses_exact_counts_and_preserves_failure(tmp_path, gap)
     step = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
     assert step, "CI needs an always-run exact counter check"
     script = textwrap.dedent(step.group(1).split("run: |\n", 1)[1])
+    code = script.split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
     totals = {
         "covered_lines": 100_000, "num_statements": 100_000, "missing_lines": 0,
         "covered_branches": 80, "num_branches": 80, "missing_branches": 0, "excluded_lines": 0,
@@ -129,8 +129,7 @@ def test_ci_counter_check_uses_exact_counts_and_preserves_failure(tmp_path, gap)
         (tmp_path / ".artifacts").mkdir()
         (tmp_path / ".artifacts" / "coverage.json").write_text(json.dumps({"totals": totals}), encoding="utf-8")
     result = subprocess.run(
-        ["bash", "-c", script], cwd=tmp_path, capture_output=True, text=True, check=False,
-        env={**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"},
+        [sys.executable, "-c", code], cwd=tmp_path, capture_output=True, text=True, check=False,
     )
     assert (result.returncode == 0) == (gap == "complete"), result.stdout + result.stderr
     if gap != "missing-report":

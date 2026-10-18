@@ -524,7 +524,7 @@ def test_privacy_of_failing_csv_row_in_all_report_formats(project):
         assert ".behave-hive" not in text, report
         assert "run-" not in text, report
         assert str(Path.home()) not in text, report
-        assert "features/steps/steps.py" in text
+        assert "features/steps/steps.py" in text, text[text.find("Traceback") : text.find("Traceback") + 900]
 
 
 def test_run_without_scenarios_removes_the_previous_report_it_generated(project):

@@ -1,4 +1,5 @@
 """Builds the wheel and sdist and installs the wheel in clean venvs with pip and uv (D12)."""
+import os
 import shutil
 import subprocess
 import sys
@@ -49,7 +50,7 @@ def features(tmp_path):
 
 
 def venv_executable(venv: Path, name: str) -> Path:
-    return venv / "bin" / name
+    return venv / ("Scripts" if os.name == "nt" else "bin") / name
 
 
 def project_version() -> str:

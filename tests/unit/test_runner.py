@@ -39,7 +39,7 @@ def test_plan_has_locations_file_with_one_absolute_location_per_unit(tmp_path):
     assert plan_path == tmp_path / "tmp" / "batch-2.plan.json"
     assert Path(plan["locations_file"]) == tmp_path / "tmp" / "batch-2.locations"
     assert Path(plan["locations_file"]).read_text(encoding="utf-8").splitlines() == [
-        f"{ROOT}/a.feature:10", f"{ROOT}/a.feature:11", f"{ROOT}/a.feature:12",
+        f"{ROOT / 'a.feature'}:10", f"{ROOT / 'a.feature'}:11", f"{ROOT / 'a.feature'}:12",
     ]
     assert plan["behave_args"] == ["-D", "k=v"]
     assert Path(plan["cucumber_out"]) == tmp_path / "tmp" / "batch-2.json"
@@ -48,7 +48,7 @@ def test_plan_has_locations_file_with_one_absolute_location_per_unit(tmp_path):
 
 def test_plan_with_feature_units_lists_only_the_file(tmp_path):
     plan = json.loads(build_plan(batch(1, 1, whole_files=True), tmp_path, [], allure=False).read_text())
-    assert Path(plan["locations_file"]).read_text(encoding="utf-8").splitlines() == [f"{ROOT}/a.feature"]
+    assert Path(plan["locations_file"]).read_text(encoding="utf-8").splitlines() == [str(ROOT / "a.feature")]
 
 
 def test_plan_with_allure_has_a_per_batch_allure_dir(tmp_path):
@@ -284,6 +284,7 @@ def test_cleanup_remove_tmp_tolerates_a_missing_results_dir(tmp_path):
     remove_tmp(tmp_path / "reports")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="owner-only modes are a POSIX feature")
 def test_plan_permissions_are_owner_only_even_with_a_permissive_umask(tmp_path):
     mask = os.umask(0)
     try:
@@ -353,6 +354,7 @@ def test_stale_report_cleanup_ignores_missing_files_directories_and_symlinks(tmp
     assert link.is_symlink() and real.exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="chmod cannot make a file unreadable on Windows")
 def test_stale_report_cleanup_ignores_unreadable_files(tmp_path):
     report = tmp_path / "report.html"
     report.write_text(REPORT_MARKER, encoding="utf-8")
