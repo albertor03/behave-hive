@@ -62,7 +62,7 @@ def test_expand_writes_the_expanded_tree(tmp_path, capsys):
     dst = tmp_path / "out"
     assert cli.main(["expand", str(src), str(dst)]) == 0
     assert "| v |\n      | 1 |" in (dst / "a.feature").read_text()
-    assert (dst / "v.csv").is_symlink()
+    assert not (dst / "v.csv").exists()
 
 
 def test_expand_reexpansion_removes_stale_feature(tmp_path):
@@ -131,6 +131,17 @@ def test_run_reports_inline_and_csv_example_tables_and_the_csv_files(project):
     assert "Examples: 1 inline, 1 from CSV" in result.stdout
     assert "features/data/values.csv" in result.stdout
     assert "Mode: sequential" in result.stdout
+
+
+def test_run_expands_data_tables_in_memory_without_a_copy_or_symlinks(project):
+    csv_project(project)
+    feature = project.root / "features" / "login.feature"
+    before = feature.read_text(encoding="utf-8")
+    result = hive(project, "run", "--parallel", "-w", "2", "--keep-tmp")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (project.root / ".behave-hive").exists()
+    assert [p for p in project.root.rglob("*") if p.is_symlink()] == []
+    assert feature.read_text(encoding="utf-8") == before
 
 
 def test_run_json_only_suite_passes_every_object_and_reports_the_json_tables(project):
@@ -513,7 +524,7 @@ def test_privacy_of_failing_csv_row_in_all_report_formats(project):
         assert ".behave-hive" not in text, report
         assert "run-" not in text, report
         assert str(Path.home()) not in text, report
-        assert "features/steps/steps.py" in text
+        assert "features/steps/steps.py" in text, text[text.find("Traceback") : text.find("Traceback") + 900]
 
 
 def test_run_without_scenarios_removes_the_previous_report_it_generated(project):
@@ -572,7 +583,7 @@ def test_html_report_shows_the_run_context(project):
     assert context["Command"] == "behave-hive run --parallel -w 3 --formats html"
     assert re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", context["Started"])
     assert context["Versions"].endswith(f"Python {platform.python_version()}")
-    assert "Speedup" in context
+    # "Speedup" needs measurable scenario durations, which a coarse Windows clock may not give: see test_html_report
 
 
 def test_html_report_command_does_not_leak_the_home_directory(project, monkeypatch):

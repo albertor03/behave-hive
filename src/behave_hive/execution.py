@@ -91,9 +91,26 @@ def _move_allure(job: Job, results_dir: Path) -> None:
         os.replace(path, target / path.name)
 
 
-def _kill_group(pid: int, sig: int) -> None:
-    with suppress(ProcessLookupError):
-        os.killpg(os.getpgid(pid), sig)
+if os.name == "nt":
+    TASKKILL = str(Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "taskkill.exe")
+    # CTRL_BREAK_EVENT reaches only a process group of its own
+    NEW_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+
+    def _kill_group(pid: int, force: bool) -> None:
+        """Ask the batch process to stop (Ctrl+Break), or end its whole process tree."""
+        if force:
+            subprocess.run([TASKKILL, "/T", "/F", "/PID", str(pid)], check=False, capture_output=True)
+        else:
+            with suppress(OSError):
+                os.kill(pid, signal.CTRL_BREAK_EVENT)
+
+else:
+    NEW_GROUP = {"start_new_session": True}
+
+    def _kill_group(pid: int, force: bool) -> None:
+        """Send SIGTERM, or SIGKILL when `force`, to the whole process group of the batch."""
+        with suppress(ProcessLookupError):
+            os.killpg(os.getpgid(pid), signal.SIGKILL if force else signal.SIGTERM)
 
 
 class BatchPool:
@@ -155,7 +172,7 @@ class BatchPool:
         env = {**os.environ, "BEHAVE_HIVE_WORKER": str(slot), "BEHAVE_HIVE_BATCH": str(job.batch.index)}
         proc = self._popen(
             build_command(job.plan_path), cwd=str(self._cwd), stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True, env=env,
+            env=env, **NEW_GROUP,
         )
         self._procs[job.batch.index] = proc
         return proc
@@ -172,21 +189,21 @@ class BatchPool:
         self._echo(_line(outcome))
         return outcome, partial
 
-    def interrupt(self, kill_group: Callable[[int, int], None], grace: float) -> None:
+    def interrupt(self, kill_group: Callable[[int, bool], None], grace: float) -> None:
         """Stop launching, ask every running group to end and kill the ones that ignore it."""
         with self._lock:
             self._cancel.set()
             running = list(self._procs.values())
             for proc in running:
                 if proc.poll() is None:
-                    kill_group(proc.pid, signal.SIGTERM)
+                    kill_group(proc.pid, False)
         deadline = time.monotonic() + grace
         for proc in running:
             while proc.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
             with self._lock:
                 if proc.poll() is None:
-                    kill_group(proc.pid, signal.SIGKILL)
+                    kill_group(proc.pid, True)
 
 
 def execute_batches(
@@ -198,7 +215,7 @@ def execute_batches(
     echo: Callable[[str], None] = print,
     before_launch: Callable[[], None] = lambda: None,
     wait: Callable = concurrent.futures.wait,
-    kill_group: Callable[[int, int], None] = _kill_group,
+    kill_group: Callable[[int, bool], None] = _kill_group,
     grace: float = GRACE_SECONDS,
 ) -> ExecutionResult:
     """Run every job in its own process, never more than `workers` at a time (D3)."""

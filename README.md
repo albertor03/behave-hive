@@ -27,7 +27,7 @@ uv add "behave-hive[playwright]"        # only needed to run the example
 
 pip works too: `pip install behave-hive`, `pip install "behave-hive[allure]"`.
 
-Requires Python 3.11 or newer. macOS and Linux are supported; Windows is not (see [Limitations](#limitations)). Run the commands in this guide with `uv run` (for example `uv run behave-hive run`), or activate the environment first.
+Requires Python 3.11 or newer. macOS, Linux and Windows are supported. Run the commands in this guide with `uv run` (for example `uv run behave-hive run`), or activate the environment first.
 
 ## Quick start
 
@@ -152,13 +152,13 @@ A `.json` path works exactly like a CSV one, as a plain path (the default) or in
 
 ### What behave-hive writes
 
-When a CSV or JSON table is present, the whole features root is copied to a working directory: `.feature` files are written expanded and every other file is a symlink to the original. `uri`s in the reports are the original ones; the HTML report shows `path.csv:row` or `path.json:N` next to each scenario. To see the result:
+CSV and JSON tables are expanded in memory when behave parses each `.feature`: nothing is copied or linked, behave runs your original files, and your steps and hooks load from where they are. `uri`s in the reports are the original ones; the HTML report shows `path.csv:row` or `path.json:N` next to each scenario. To see the expanded `.feature` files:
 
 ```bash
 behave-hive expand features /tmp/expanded
 ```
 
-`expand` refuses, without deleting anything, a destination that is the source or one of its ancestors, a symlink, or a non-empty directory not created by a previous expansion.
+`expand` writes only the expanded `.feature` files. It refuses, without deleting anything, a destination that is the source or one of its ancestors, a symlink, or a non-empty directory not created by a previous expansion.
 
 ## Running
 
@@ -228,7 +228,7 @@ report_path = reports/report.html
 | `report_name` | project name | HTML title and heading only; blank also uses the fallback. |
 | `report_path` | `<project-root>/report.html` | Full HTML filename; relative to the project root, or absolute. Parents are created. |
 | `formats` | `cucumber, html` | Comma or space separated; TOML arrays work too. |
-| `work_dir` | `.behave-hive` | Each run uses its own subdirectory. |
+| `work_dir` | `.behave-hive` | Deprecated and ignored: runs no longer need a working directory. Accepted so existing configuration keeps working. |
 | `behave_args` | empty | Shell-style string (`--tags="@a and not @b" -D env=qa`) or a TOML array. `%` is literal. |
 | `paths` | `features` | What to run when no path is given. |
 
@@ -356,10 +356,9 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
 ## Limitations
 
 - **Lines in expanded features:** rows generated from a CSV or JSON file, and everything after them in the file, report the lines of the expanded file. The `uri` is the original one and the HTML shows `csv:row` or `json:N`; files without data tables keep their lines.
-- **`Path(__file__)` in steps:** steps run through symlinks in the expanded tree. Use `Path(__file__).resolve()` to reach files next to the original step.
 - **Unbalanced batches:** units are split into consecutive chunks. Use `chunk = 1` for dynamic balancing, at the cost of one process per unit.
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
-- **POSIX only (macOS and Linux):** the run lock uses `fcntl.flock`, interruption signals whole process groups (`os.killpg`) so browsers started by a step do not survive Ctrl+C, and the expanded copy of your features links every non-feature file with symlinks. None of these exist, or work without special privileges, on Windows. CI covers Linux and macOS only. WSL runs Linux and should work, but it is not tested.
+- **Windows:** supported, tested in CI on Python 3.11 to 3.14. Ctrl+C asks each batch to stop with Ctrl+Break and, after a grace period, ends its whole process tree so browsers started by a step do not survive. Owner-only permissions on the run files (`0600`/`0700`) apply to macOS and Linux; on Windows they keep the default permissions of the results directory.
 - **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV and JSON.
 - **Data file access is not sandboxed:** a feature may reference any CSV or JSON file readable by the
   current user, including paths with `..`; its rows can appear in reports.
@@ -367,19 +366,16 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
   locations, including `-D key=value` arguments. These files are owner-only
   (`0600`, inside a `0700` temporary directory); remove retained runs when no
   longer needed. The results lock is also owner-only.
-- **Report privacy:** behave-hive rewrites expanded roots, the working directory
-  and the home prefix in error messages to original relative paths or `~`.
-  The directly used Cucumber formatter (`behave -f`) has no run path map and
-  does not perform this rewriting. Screenshots and attached data are not scrubbed
+- **Report privacy:** behave-hive rewrites the working directory and the home
+  prefix in error messages to relative paths or `~`, also for Windows paths.
+  The directly used Cucumber formatter (`behave -f`) does not perform this rewriting. Screenshots and attached data are not scrubbed
   and may contain sensitive application data; scenario inputs can also appear.
 - **Expansion race window:** destination checks are repeated before deletion
   and marker creation. This narrows, but does not eliminate, filesystem races.
 
 ## Roadmap
 
-Next on the list:
-
-- **Windows support:** replace the POSIX-only pieces described under [Limitations](#limitations) (file lock, process groups and symlinks) and add Windows to CI.
+Nothing is scheduled at the moment. Proposals are welcome as [issues](https://github.com/albertor03/behave-hive/issues).
 
 ## Contributing
 

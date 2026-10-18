@@ -82,7 +82,7 @@ def test_coverage_gate_rejects_any_missing_statement_or_branch(tmp_path, gap):
     assert totals["missing_lines"] == (1 if gap in ("statement", "new-module") else 0)
     assert totals["missing_branches"] == (1 if gap == "branch" else 0)
     if gap == "new-module":
-        assert data["files"]["probe/new_module.py"]["executed_lines"] == []
+        assert data["files"][str(Path("probe") / "new_module.py")]["executed_lines"] == []
     if gap == "complete":
         assert result.returncode == 0, result.stdout + result.stderr
         assert totals["percent_covered"] == 100
@@ -159,4 +159,4 @@ def test_coverage_measures_worker_subprocess(make_project, tmp_path):
         data = CoverageData(basename=str(path))
         data.read()
         measured.update(data.measured_files())
-    assert any(path.endswith("behave_hive/worker.py") for path in measured)
+    assert any(Path(path).parts[-2:] == ("behave_hive", "worker.py") for path in measured)

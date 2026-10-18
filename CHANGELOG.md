@@ -7,14 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-18
+## [0.3.0] - 2026-10-18
 
 ### Added
 
 - **JSON Examples:** a single `| data/users.json |` or `| read('data/users.json') |` cell under `Examples:` is replaced by the objects of the file (an array of objects with the same keys; strings, numbers, booleans and `null`). JSON, CSV and hand-written tables can live in the same outline; every JSON error names the feature, the line, the file and the object; the HTML report shows `path.json:N` for each scenario. The start-of-run summary adds `from JSON` when a suite uses JSON tables.
 
+- **Windows support:** the run lock uses `msvcrt` on Windows, each batch runs in its own process group and Ctrl+C ends its whole process tree, and report paths are scrubbed in their Windows spelling. CI runs the unit, end-to-end and packaging suites on Windows, and the release test-installs the wheel there.
+
 ### Changed
 
+- **Breaking:** CSV and JSON tables are expanded in memory when behave parses each `.feature`. The working copy of the features root and its symlinks are gone, behave runs the original files, and `work_dir` is accepted but ignored. `behave-hive expand` writes only the expanded `.feature` files.
+- The coverage gate is measured on the Linux and Windows runs combined.
 - Errors raised for data files are `ExamplesDataError` (`CsvExamplesError` remains as an alias), and the internal `x-behave-hive` source uses `data_path` and `data_row` instead of `csv_path` and `csv_row`.
 
 ## [0.1.1] - 2026-10-18

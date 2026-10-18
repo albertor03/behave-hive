@@ -28,9 +28,9 @@ def test_csv_examples_error_message_includes_all_locations():
         data_row=3,
     )
     msg = str(err)
-    assert "features/login.feature" in msg
+    assert str(Path("features/login.feature")) in msg
     assert "line 7" in msg
-    assert "features/data/login.csv" in msg
+    assert str(Path("features/data/login.csv")) in msg
     assert "row 3" in msg
     assert "cell has a line break" in msg
     assert (err.feature, err.line, err.data_path, err.data_row) == (

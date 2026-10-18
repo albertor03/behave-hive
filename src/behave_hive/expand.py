@@ -60,11 +60,6 @@ class ExpandResult:
     sources: list[RowSource] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class TreeResult:
-    sources_by_file: dict[Path, list[RowSource]] = field(default_factory=dict)
-
-
 def _directive_language(lines: list[str]) -> str | None:
     """Language from a `# language: xx` directive in the leading non-content lines."""
     for line in lines:
@@ -342,11 +337,10 @@ def _validate_destination(src: Path, dst: Path) -> None:
             raise HiveError(f"expansion destination is not empty and was not created by behave-hive: {dst}")
 
 
-def expand_tree(src_root: Path, dst: Path, lang: str) -> TreeResult:
-    """Copy `src_root` to `dst`: .feature files are expanded, everything else is symlinked.
+def expand_features(src_root: Path, dst: Path, lang: str) -> None:
+    """Write the `.feature` files of `src_root`, with their data tables expanded, into `dst`.
 
-    Steps and environment.py are linked, so `__file__` resolves to the original
-    and project-relative imports keep working.
+    Nothing else is copied or linked: `run` expands in memory, and this is how to see the result.
     """
     src, dst = Path(src_root).resolve(), Path(dst)
     _validate_destination(src, dst)
@@ -358,25 +352,10 @@ def expand_tree(src_root: Path, dst: Path, lang: str) -> TreeResult:
     _validate_destination(src, dst)
     (dst_resolved / EXPANDED_MARKER).write_text("", encoding="utf-8")
 
-    sources_by_file: dict[Path, list[RowSource]] = {}
-    for path in sorted(src.rglob("*")):
-        if (
-            "__pycache__" in path.parts
-            or path == dst_resolved
-            or dst_resolved in path.parents
-            or path in dst_resolved.parents
-        ):
-            continue
+    for path in sorted(src.rglob("*.feature")):
         target = dst_resolved / path.relative_to(src)
-        if path.is_symlink() or (not path.is_dir() and path.suffix != ".feature"):
-            os.symlink(path.resolve(), target)
-        elif path.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-        else:
-            with open(path, encoding="utf-8", newline="") as f:
-                result = expand_feature_text(f.read(), path, lang)
-            with open(target, "w", encoding="utf-8", newline="") as f:
-                f.write(result.text)
-            if result.sources:
-                sources_by_file[target] = result.sources
-    return TreeResult(sources_by_file)
+        with open(path, encoding="utf-8", newline="") as f:
+            text = expand_feature_text(f.read(), path, lang).text
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "w", encoding="utf-8", newline="") as f:
+            f.write(text)

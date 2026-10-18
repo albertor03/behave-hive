@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -338,7 +339,7 @@ def test_validation_rejects_mistyped_toml_and_malformed_arguments(project, key, 
 def test_malformed_config_reports_parse_error_and_filename(project, filename, text):
     path = project / filename
     path.write_text(text)
-    with pytest.raises(ConfigError, match=f"cannot parse {path}"):
+    with pytest.raises(ConfigError, match=f"cannot parse {re.escape(str(path))}"):
         load(config_path=path)
 
 
@@ -567,6 +568,7 @@ def test_html_settings_are_not_resolved_when_html_is_not_a_format(project):
 def test_report_path_expands_the_home_directory(project, monkeypatch):
     home = project / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows expands ~ from here
     (project / "behave.ini").write_text(ini(report_path="~/qa/report.html"))
     assert load().report_path == home / "qa/report.html"
 
