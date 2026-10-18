@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import os
 import signal
@@ -36,7 +37,7 @@ def test_finished_process_is_not_signalled_during_interrupt(tmp_path):
         started.set()
         return Finished()
 
-    def interrupted(futures):
+    def interrupted(futures, timeout=None):
         assert started.wait(10)
         raise KeyboardInterrupt
 
@@ -82,7 +83,7 @@ def test_sigint_before_a_pending_task_launches_prevents_the_launch_and_kills_run
             at_barrier.set()
             assert release.wait(10)
 
-    def fake_wait(futures):
+    def fake_wait(futures, timeout=None):
         assert started.wait(10) and at_barrier.wait(10)
         raise KeyboardInterrupt
 
@@ -120,7 +121,7 @@ def test_interrupt_forces_the_kill_when_a_process_ignores_the_request(tmp_path):
         def poll(self):
             return -9 if dead.is_set() else None
 
-    def fake_wait(futures):
+    def fake_wait(futures, timeout=None):
         assert started.wait(10)
         raise KeyboardInterrupt
 
@@ -264,3 +265,25 @@ def test_ctrl_break_integration_stops_everything_on_windows(make_project):
     assert proc.returncode == 130, output
     for pid in (int(p.name) for p in pids_dir.glob("*")):
         assert not _windows_process_alive(pid)
+
+
+def test_execution_waits_in_short_steps_so_the_main_thread_can_take_ctrl_c(tmp_path):
+    """On Windows a blocking wait does not run signal handlers until it returns."""
+    jobs = prepare_jobs([Batch(1, Path("/proj/features"), (Unit(Path("/proj/features/a.feature"), 3),))],
+                        tmp_path, [], allure=False)
+    timeouts = []
+
+    def polling_wait(futures, timeout=None):
+        timeouts.append(timeout)
+        return concurrent.futures.wait(futures, timeout=timeout)
+
+    class Done:
+        pid = 1
+
+        def wait(self):
+            time.sleep(0.3)
+            return 0
+
+    execute_batches(jobs, 1, cwd=tmp_path, popen=lambda *a, **k: Done(), wait=polling_wait, echo=lambda line: None)
+    assert len(timeouts) > 1
+    assert all(t is not None and 0 < t <= 0.5 for t in timeouts)

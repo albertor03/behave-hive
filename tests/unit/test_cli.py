@@ -599,9 +599,15 @@ def test_html_report_command_does_not_leak_the_home_directory(project, monkeypat
 
 def test_run_in_a_non_ascii_directory_with_a_non_utf8_locale(make_project):
     """Windows opens text files with its ANSI code page; the Latin-1 locale reproduces that elsewhere."""
+    env = {**os.environ, "PYTHONUTF8": "0", "LC_ALL": "en_US.ISO8859-1", "LANG": "en_US.ISO8859-1"}
+    probe = subprocess.run(
+        [sys.executable, "-c", "import locale, sys; print(locale.getpreferredencoding(0), sys.getfilesystemencoding())"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.split()
+    if probe[0].lower().replace("-", "") == "utf8" or probe[1].lower().replace("-", "") != "utf8":
+        pytest.skip(f"no locale whose text encoding differs from the UTF-8 file names here: {probe}")
     project = make_project("Jos\u00e9")
     csv_project(project, rows=("ok", "ok"))
-    env = {**os.environ, "PYTHONUTF8": "0", "LC_ALL": "en_US.ISO8859-1", "LANG": "en_US.ISO8859-1"}
     result = subprocess.run(
         [sys.executable, "-m", "behave_hive.cli", "run", "--parallel", "-w", "2"],
         cwd=project.root, capture_output=True, env=env, timeout=120, check=False,
