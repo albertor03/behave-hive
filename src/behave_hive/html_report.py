@@ -15,12 +15,15 @@ IMAGE_TYPE = re.compile(r"^image/[A-Za-z0-9.+-]+$")
 BASE64 = re.compile(r"^[A-Za-z0-9+/=]*$")
 SLOWEST = 5
 
+REPORT_MARKER = "behave-hive-report-4f9c2e7a"
+
 PAGE = Template(
     """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="$marker">
 <!--CSP-->
 <title>$report_name</title>
 <style>
@@ -354,6 +357,7 @@ def render(
         for feature in report.features
     )
     page = PAGE.substitute(
+        marker=REPORT_MARKER,
         report_name=escape(report_name),
         totals=escape(format_summary(summary, duration)),
         statusbar=statusbar,

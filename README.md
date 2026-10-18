@@ -179,6 +179,8 @@ file uses `report_path` independently (default `<project-root>/report.html`):
 | `report_path` | Self-contained HTML with inline filters, no external requests, light and dark mode; project name in title and heading. |
 | `logs/batch-<n>.log` | Output of each behave process. |
 
+Every generated HTML carries a `behave-hive-report-4f9c2e7a` generator marker in its head. At the start of a run behave-hive deletes the previous file at `report_path` only when it is a regular file with that marker, so an aborted run never leaves an old report that looks current, and any other file at `report_path` is never touched.
+
 At the start of a run behave-hive deletes only what it manages (`cucumber.json`, `report.html`, `allure-results/`, `logs/`, `tmp/`); anything else in `results_dir` is kept. A second run on the same `results_dir` exits with code 2.
 
 Scenario and feature ids are stable: they do not depend on `workers`, `chunk` or input order. Hook failures and failed `context.add_cleanup` functions count as `failed` (`broken` in Allure). A `pending` step counts as `pending`, except inside a `@wip` scenario.

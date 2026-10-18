@@ -553,3 +553,29 @@ def test_report_path_rejects_an_existing_directory(project):
     (project / "behave.ini").write_text(ini(report_path="."))
     with pytest.raises(ConfigError, match="report_path"):
         load()
+
+
+def test_html_settings_are_not_resolved_when_html_is_not_a_format(project):
+    (project / "behave.ini").write_text(ini(formats="cucumber"))
+    (project / "pyproject.toml").write_text("not valid TOML !")
+    (project / "report.html").mkdir()
+    cfg = load()
+    assert cfg.report_name is None
+    assert cfg.report_path is None
+
+
+def test_report_path_expands_the_home_directory(project, monkeypatch):
+    home = project / "home"
+    monkeypatch.setenv("HOME", str(home))
+    (project / "behave.ini").write_text(ini(report_path="~/qa/report.html"))
+    assert load().report_path == home / "qa/report.html"
+
+
+def test_report_path_with_home_but_no_home_directory_is_a_config_error(project, monkeypatch):
+    def unknown(path):
+        raise RuntimeError("Could not determine home directory.")
+
+    monkeypatch.setattr(Path, "expanduser", unknown)
+    (project / "behave.ini").write_text(ini(report_path="~/report.html"))
+    with pytest.raises(ConfigError, match="report_path"):
+        load()

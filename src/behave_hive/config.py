@@ -192,10 +192,10 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
     values["behave_args"] = (*values["behave_args"], *extra_args)
     _validate(values)
     root = found.resolve().parent if found is not None else Path.cwd()
-    report_name = values["report_name"] or _project_name(root)
-    report_path = (root / (values["report_path"] or "report.html")).resolve()
-    if report_path.is_dir():
-        raise ConfigError(f"invalid report_path: {report_path} is a directory (use an HTML filename)")
+    report_name = report_path = None
+    if "html" in values["formats"]:
+        report_name = values["report_name"] or _project_name(root)
+        report_path = _report_path(root, values["report_path"])
     return HiveConfig(
         parallel=values["parallel"],
         workers=values["workers"],
@@ -210,6 +210,16 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
         report_name=report_name,
         report_path=report_path,
     )
+
+
+def _report_path(root: Path, configured: Path | None) -> Path:
+    try:
+        path = (root / (configured or Path("report.html")).expanduser()).resolve()
+    except RuntimeError as exc:
+        raise ConfigError(f"invalid report_path {configured}: {exc}") from None
+    if path.is_dir():
+        raise ConfigError(f"invalid report_path: {path} is a directory (use an HTML filename)")
+    return path
 
 
 def _project_name(root: Path) -> str:

@@ -485,3 +485,22 @@ def test_privacy_of_failing_csv_row_in_all_report_formats(project):
         assert "run-" not in text, report
         assert str(Path.home()) not in text, report
         assert "features/steps/steps.py" in text
+
+
+def test_run_without_scenarios_removes_the_previous_report_it_generated(project):
+    csv_project(project)
+    assert hive(project, "run").returncode == 0
+    report = project.root / "report.html"
+    assert report.is_file()
+
+    result = hive(project, "run", "--", "--tags=@nonexistent")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not report.exists()
+
+
+def test_run_keeps_a_report_path_file_that_behave_hive_did_not_generate(project):
+    csv_project(project)
+    project.write("report.html", "<html>precious</html>")
+    result = hive(project, "run", "--", "--tags=@nonexistent")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project.root / "report.html").read_text() == "<html>precious</html>"

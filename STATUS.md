@@ -13,12 +13,11 @@ work pending. Implementation is paused. The tracking board is
 
 | Check | Latest verified result |
 | --- | --- |
-| Entire test suite | **624 passed** in one run |
-| Unit tests | 607 passed |
-| E2E tests | 12 passed |
-| Packaging tests | 5 passed, including clean pip/uv installs |
-| Library statements | **1494 / 1494 covered; 0 missing** |
-| Library branches | **474 / 474 covered; 0 missing** |
+| Entire test suite | **643 passed** (626 unit + 17 e2e/packaging) |
+| Unit tests | 626 passed |
+| E2E and packaging tests | 17 passed (12 e2e, 5 packaging with clean pip/uv installs) |
+| Library statements | **1527 / 1527 covered; 0 missing** |
+| Library branches | **482 / 482 covered; 0 missing** |
 | Coverage exclusions | 0 excluded lines; all 20 library Python files included |
 | Quality | Ruff, source pylint duplication and pip-audit pass |
 | Workflow validation | actionlint 1.7.12 and local workflow contract tests pass |
@@ -61,7 +60,7 @@ the decoded screenshot work with CSP active and no browser console errors.
 | HU-6: example and usage docs | Implemented and integrated | Later docs track implemented extensions |
 | HU-7: original Allure paths and HTML v2 | Implemented and integrated | Error privacy is implemented in HU-9; diagnostics remain HU-11 |
 | HU-8: quality gates | Integrated into develop | Exact-100 strengthening is implemented in HU-16 |
-| HU-9: privacy/security | Tasks 3.1–3.8 implemented and locally verified | Required full-tree reviews, then authorized integration |
+| HU-9: privacy/security | Tasks 3.1–3.9 done; `/security-review` and `/code-review` ran on 2026-10-18 and confirmed findings are fixed | Fixes after `63d4c4c` are uncommitted; authorized integration |
 | HU-10: refactor | Not implemented | All nine tasks, including removing temporary complexity exceptions |
 | HU-11: diagnostics | Not implemented | All ten tasks, including Allure attachments and environment metadata |
 | HU-12: hardened CI | Implemented and integrated into develop | Real CI, second-run cache and failing-run artifact evidence |
@@ -70,12 +69,12 @@ the decoded screenshot work with CSP active and no browser console errors.
 | HU-15: HTML name/path | 6/6 implementation tasks verified | Review, commit/integration and archive |
 | HU-16: exact library coverage | 16/16 implementation tasks verified | Review, commit/integration and archive |
 
-`develop` and the current branch HEAD point to `69c85fd`. The active branch is
-`feature/us-9-security`; its working tree also contains the uncommitted HU-15 and
-HU-16 changes. Their feature branch names are not committed snapshots of those
-changes. `main` still points to the initial `fcb852b` commit. No Git remote is
-configured, and no GitHub/PyPI publication or remote settings application has
-been performed.
+`develop` points to `69c85fd`. The active branch `feature/us-9-security` is one
+commit ahead (`63d4c4c`, which combines HU-9, HU-15 and HU-16) and its working tree
+holds the uncommitted review fixes. `main` still points to the initial `fcb852b`
+commit. No Git remote is configured (`origin/HEAD` is only a local ref used by
+`/security-review`), and no GitHub/PyPI publication or remote settings application
+has been performed.
 
 Already integrated merges: HU-8 `1c778a4`, HU-12 `3f78906`, HU-13 `662932f`,
 HU-14 `69c85fd`. New commits/merges, pushes, tags, external settings and publication
@@ -89,7 +88,7 @@ from complete planning artifacts and from release/integration completion.
 | Change | Checked tasks | Pending |
 | --- | ---: | --- |
 | `add-behave-hive-mvp` | **64/66** | 10.3 real CI and 10.5 approved repository publication |
-| `harden-and-polish-behave-hive` | **19/42** | 3.9 review, HU-10, HU-11 and final closure/integration |
+| `harden-and-polish-behave-hive` | **26/48** | HU-10, HU-11 and final closure/integration |
 | `add-github-actions-pipeline` | **18/24** | Settings/publisher, Trello/integration closure and real CI/release runs |
 | `configure-html-report-name` | **6/6** | Review/integration/archive follow-up |
 | `reach-full-library-coverage` | **16/16** | Review/integration/archive follow-up |
@@ -100,8 +99,8 @@ pending. No change has been archived.
 
 ## Pending backlog
 
-- [ ] **HU-9 review:** enable `/security-review` and `/code-review`, or obtain
-  approval for an equivalent method. Neither review has been performed or waived.
+- [x] **HU-9 review:** done on 2026-10-18; see `baseline.md` "Security review".
+  Findings 9 and 10 are deferred to HU-10.
 - [ ] **HU-10:** share file discovery/background pairing and test helpers;
   extract/split execution, expansion and merge; package the HTML template;
   remove temporary C901 exceptions; complete the `/simplify` review.

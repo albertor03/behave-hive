@@ -25,7 +25,7 @@ try:
 except ImportError as exc:
     raise HiveError('the allure format needs allure-behave: pip install "behave-hive[allure]"') from exc
 
-from behave_hive.privacy import scrub
+from behave_hive.privacy import scrub, user_home
 from behave_hive.roots import PathMap
 from behave_hive.selection import SelectionSnapshot
 
@@ -60,7 +60,7 @@ class HiveAllureListener(AllureListener):
             for key in ("message", "trace"):
                 value = getattr(details, key)
                 if value is not None:
-                    setattr(details, key, scrub(value, self.path_map, Path.cwd(), Path.home()))
+                    setattr(details, key, scrub(value, self.path_map, Path.cwd(), user_home()))
         for key in ("steps", "befores", "afters"):
             for child in getattr(result, key, []):
                 self.scrub_result(child)

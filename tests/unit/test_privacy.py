@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from behave_hive.privacy import scrub
+from behave_hive.privacy import scrub, user_home
 from behave_hive.roots import PathMap
 
 CWD = Path("/Users/tester/project")
@@ -51,3 +51,21 @@ def test_scrub_mapping_outside_cwd_and_project_root_preserves_relative_paths():
 
 def test_scrub_home_equal_to_cwd_prefers_project_relative_paths():
     assert scrub(f"{HOME}/a.py", PathMap({}), HOME, HOME) == "a.py"
+
+
+def test_user_home_is_none_when_the_home_directory_cannot_be_determined(monkeypatch):
+    def unknown(cls):
+        raise RuntimeError("Could not determine home directory.")
+
+    monkeypatch.setattr(Path, "home", classmethod(unknown))
+    assert user_home() is None
+
+
+def test_user_home_is_the_home_directory(monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: HOME))
+    assert user_home() == HOME
+
+
+def test_scrub_without_a_home_directory_still_rewrites_run_paths():
+    text = f'File "{EXPANDED}/steps/login.py", line 7 in {CWD}/support.py'
+    assert scrub(text, MAPPING, CWD, None) == 'File "features/steps/login.py", line 7 in support.py'

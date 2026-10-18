@@ -60,3 +60,25 @@ def test_lock_permissions_are_owner_only_for_new_and_existing_files(tmp_path, ex
             assert stat.S_IMODE((tmp_path / LOCK_NAME).stat().st_mode) == 0o600
     finally:
         os.umask(mask)
+
+
+def test_lock_file_that_is_a_symlink_is_rejected_and_its_target_untouched(tmp_path):
+    target = tmp_path / "shared.html"
+    target.write_text("data", encoding="utf-8")
+    target.chmod(0o644)
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / LOCK_NAME).symlink_to(target)
+
+    with pytest.raises(HiveError, match="cannot open the results lock"), results_lock(results):
+        pass
+    assert stat.S_IMODE(target.stat().st_mode) == 0o644
+
+
+def test_lock_file_that_cannot_be_opened_is_a_hive_error(tmp_path):
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / LOCK_NAME).mkdir()
+
+    with pytest.raises(HiveError, match="cannot open the results lock"), results_lock(results):
+        pass

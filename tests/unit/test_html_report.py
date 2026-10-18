@@ -2,7 +2,7 @@ import base64
 import hashlib
 import re
 
-from behave_hive.html_report import render
+from behave_hive.html_report import REPORT_MARKER, render
 from behave_hive.merge import Report
 from behave_hive.summary import summarize
 
@@ -280,3 +280,10 @@ def test_csp_hash_matches_the_exact_emitted_script():
     assert "img-src data:" in policy.group(1)
     assert "style-src 'unsafe-inline'" in policy.group(1)
     assert policy.start() < page.index("<title>")
+
+
+def test_report_carries_the_generator_marker_in_the_head():
+    page = html([])
+    head = page[: page.index("</head>")]
+    assert f'<meta name="generator" content="{REPORT_MARKER}">' in head
+    assert REPORT_MARKER == "behave-hive-report-4f9c2e7a"

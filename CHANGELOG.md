@@ -37,9 +37,14 @@ verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
 - Add a default-deny HTML CSP with the exact inline script's SHA-256 hash.
 - Check process liveness before interruption signals under the process lock.
 - Revalidate expansion destinations before deletion and marker creation.
+- Mark generated HTML with a generator marker and delete only a marked previous
+  report at the start of a run, so an aborted run never leaves a stale report.
+- Open the results lock without following symlinks, create per-process
+  temporary files for atomic writes, expand `~` in `report_path`, resolve HTML
+  settings only when `html` is a format and tolerate a missing home directory.
 - Create private run configuration files exclusively with owner-only permissions
-  and restrict new/existing lock files. Full-tree security/code reviews remain
-  pending; accepted limitations are documented in the README.
+  and restrict new/existing lock files. Accepted limitations are documented in
+  the README.
 
 ## [0.1.0] - Unreleased
 

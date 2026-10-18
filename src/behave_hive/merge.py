@@ -10,7 +10,7 @@ from pathlib import Path
 from behave_hive.errors import HiveError
 from behave_hive.expand import RowSource
 from behave_hive.formatters.cucumber import feature_id
-from behave_hive.privacy import scrub
+from behave_hive.privacy import scrub, user_home
 from behave_hive.roots import PathMap
 
 EXTENSION = "x-behave-hive"
@@ -55,7 +55,7 @@ def _rewrite_hooks_and_steps(element: dict, path_map: PathMap, cwd: Path) -> Non
     for item in (*element.get("steps", []), *element.get("before", []), *element.get("after", [])):
         result = item.get("result", {})
         if "error_message" in result:
-            result["error_message"] = scrub(result["error_message"], path_map, cwd, Path.home())
+            result["error_message"] = scrub(result["error_message"], path_map, cwd, user_home())
     for hook in (*element.get("before", []), *element.get("after", [])):
         match = hook.get("match")
         if match and "location" in match:

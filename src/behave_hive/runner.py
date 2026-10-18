@@ -25,7 +25,7 @@ from behave_hive.config import HiveConfig, build_behave_config, validate_effecti
 from behave_hive.discovery import discover_units
 from behave_hive.errors import ConfigError, HiveError
 from behave_hive.expand import classify_examples, expand_tree
-from behave_hive.html_report import render
+from behave_hive.html_report import REPORT_MARKER, render
 from behave_hive.lock import results_lock
 from behave_hive.merge import merge, to_cucumber
 from behave_hive.roots import PathMap, group_by_root, needs_expansion
@@ -34,6 +34,7 @@ from behave_hive.summary import exit_code, format_summary, summarize
 MANAGED = ("cucumber.json", "report.html", "allure-results", "logs", "tmp")
 FAILING = ("failed", "undefined", "pending")
 GRACE_SECONDS = 5
+MARKER_SCAN_BYTES = 2048
 
 
 @dataclass(frozen=True)
@@ -296,6 +297,19 @@ def clean_managed(results_dir: Path) -> None:
             path.unlink()
 
 
+def remove_stale_report(path: Path) -> None:
+    """Delete `path` only when it is a regular file that behave-hive generated (marker in its head)."""
+    if path.is_symlink() or not path.is_file():
+        return
+    try:
+        with open(path, "rb") as stream:
+            head = stream.read(MARKER_SCAN_BYTES)
+    except OSError:
+        return
+    if REPORT_MARKER.encode() in head:
+        path.unlink(missing_ok=True)
+
+
 def remove_tmp(results_dir: Path, run_dir: Path | None) -> None:
     """Remove `results_dir/tmp` and the run directory inside `work_dir`."""
     shutil.rmtree(Path(results_dir) / "tmp", ignore_errors=True)
@@ -332,13 +346,16 @@ def _examples_report(inputs: list[Path], lang: str) -> list[str]:
 
 
 def _write_json_atomically(path: Path, data: object) -> None:
-    _write_text_atomically(path, json.dumps(data, ensure_ascii=False, indent=2))
+    write_text_atomically(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def _write_text_atomically(path: Path, text: str) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+def write_text_atomically(path: Path, text: str) -> None:
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False) -> int:
@@ -371,6 +388,8 @@ def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False) -> int:
 
 
 def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> int:
+    if cfg.report_path is not None and "html" in cfg.formats:
+        remove_stale_report(cfg.report_path)
     for line in _examples_report([p for group in roots.values() for p in group], lang):
         print(line)
     if cfg.parallel:
@@ -413,7 +432,7 @@ def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> in
         report_path = cfg.report_path or results_dir / "report.html"
         try:
             report_path.parent.mkdir(parents=True, exist_ok=True)
-            _write_text_atomically(
+            write_text_atomically(
                 report_path, render(report, summary, duration, report_name=cfg.report_name or "behave-hive report")
             )
         except OSError as exc:
