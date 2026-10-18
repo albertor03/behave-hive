@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-These changes are implemented locally; review/integration and remote release
-verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
+No version is published yet.
 
 ### Added
 
@@ -27,6 +26,10 @@ verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
   per scenario, Scenario Outline groups and filter state in the URL fragment.
 
 ### Changed
+
+- Restructured the README around a quick start and moved the contributor and release
+  documentation to `CONTRIBUTING.md` and `docs/RELEASING.md`. The example project now
+  has one runnable example per capability, documented in `example/README.md`.
 
 - **Breaking:** the default HTML destination is now `<project-root>/report.html`.
   Set `report_path = reports/report.html` to preserve the earlier location.

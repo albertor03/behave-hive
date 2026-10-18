@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "behave-hive"
 version = "0.1.0"
-description = "behave layer with Karate-style CSV Examples, parallel execution and Allure/Cucumber JSON/HTML reports"
+description = "Run behave scenarios in parallel with Examples read from CSV files, and get Allure, Cucumber JSON and HTML reports"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -88,6 +88,16 @@ source = ["behave_hive"]
 parallel = true
 patch = ["subprocess"]
 sigterm = true
+data_file = ".artifacts/.coverage"
+
+[tool.coverage.json]
+output = ".artifacts/coverage.json"
+
+[tool.coverage.xml]
+output = ".artifacts/coverage.xml"
+
+[tool.coverage.html]
+directory = ".artifacts/htmlcov"
 
 [tool.coverage.report]
 fail_under = 100

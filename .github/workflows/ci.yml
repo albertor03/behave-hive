@@ -109,7 +109,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=xml --cov-report=json:coverage.json | tee coverage.txt
+          mkdir -p .artifacts
+          python -m pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=xml --cov-report=json | tee .artifacts/coverage.txt
       - name: Check exact coverage counters
         if: always()
         shell: bash
@@ -118,9 +119,9 @@ jobs:
           import json
           from pathlib import Path
 
-          report = Path("coverage.json")
+          report = Path(".artifacts/coverage.json")
           if not report.is_file():
-              raise SystemExit("coverage.json is missing; coverage measurement did not complete")
+              raise SystemExit(".artifacts/coverage.json is missing; coverage measurement did not complete")
           totals = json.loads(report.read_text(encoding="utf-8"))["totals"]
           for label, covered, total, missing in (
               ("Statements", "covered_lines", "num_statements", "missing_lines"),
@@ -135,10 +136,10 @@ jobs:
         with:
           name: coverage
           path: |
-            .coverage
-            coverage.xml
-            coverage.txt
-            coverage.json
+            .artifacts/.coverage
+            .artifacts/coverage.xml
+            .artifacts/coverage.txt
+            .artifacts/coverage.json
           include-hidden-files: true
           retention-days: 7
 

@@ -14,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "pyproject.toml"
 
 
+def test_coverage_outputs_live_in_the_ignored_artifacts_folder():
+    config = tomllib.loads(CONFIG.read_text(encoding="utf-8"))["tool"]["coverage"]
+    assert config["run"]["data_file"] == ".artifacts/.coverage"
+    assert config["json"]["output"] == ".artifacts/coverage.json"
+    assert config["xml"]["output"] == ".artifacts/coverage.xml"
+    assert config["html"]["directory"] == ".artifacts/htmlcov"
+    assert ".artifacts/" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
 def test_coverage_configuration_requires_complete_library_without_exemptions():
     config = tomllib.loads(CONFIG.read_text(encoding="utf-8"))["tool"]["coverage"]
     assert config["run"]["source"] == ["behave_hive"]
