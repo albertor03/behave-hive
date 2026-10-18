@@ -43,6 +43,10 @@ gh api repos/albertor03/behave-hive/environments/pypi/deployment-branch-policies
 
 1. Bump `project.version` in `pyproject.toml` on `develop` (and version assertions
    in the tests), and add `## [X.Y.Z] - YYYY-MM-DD` with notes to `CHANGELOG.md`.
+   Read the README as the PyPI page will show it: every new capability is described,
+   section titles and the table of contents match, and the screenshots show the current
+   report (`python docs/screenshots.py` when `example/` or the report changed). A
+   published page cannot be edited, only the next release fixes it.
 2. Merge `develop` into `main` through a passing pull request.
 3. Create the matching tag `vX.Y.Z` on that commit; accepted prereleases are
    `vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN`, matching the project version exactly.
