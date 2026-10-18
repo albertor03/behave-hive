@@ -74,15 +74,16 @@ def test_exact_coverage_evidence_is_generated_checked_and_always_retained():
     body = coverage_job()
     assert 'python-version: "3.14"' in body
     assert "set -o pipefail" in body
-    assert "--cov-report=json:coverage.json" in body
-    assert "| tee coverage.txt" in body
+    assert "mkdir -p .artifacts" in body
+    assert "--cov-report=json " in body and "--cov-report=xml " in body
+    assert "| tee .artifacts/coverage.txt" in body
     check = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
     assert check and "if: always()" in check.group(1)
     upload = body.split("      - uses: actions/upload-artifact@", 1)[1]
     assert "if: always()" in upload and "retention-days: 7" in upload
     for artifact in (".coverage", "coverage.xml", "coverage.txt", "coverage.json"):
-        assert f"            {artifact}\n" in upload
-    assert body.index("--cov-report=json:coverage.json") < check.start() < body.index("actions/upload-artifact@")
+        assert f"            .artifacts/{artifact}\n" in upload
+    assert body.index("--cov-report=json ") < check.start() < body.index("actions/upload-artifact@")
 
 
 @pytest.mark.parametrize("gap", ["statement", "branch", "excluded", "missing-report", "complete"])
@@ -102,7 +103,8 @@ def test_ci_counter_check_uses_exact_counts_and_preserves_failure(tmp_path, gap)
     elif gap == "excluded":
         totals["excluded_lines"] = 1
     if gap != "missing-report":
-        (tmp_path / "coverage.json").write_text(json.dumps({"totals": totals}), encoding="utf-8")
+        (tmp_path / ".artifacts").mkdir()
+        (tmp_path / ".artifacts" / "coverage.json").write_text(json.dumps({"totals": totals}), encoding="utf-8")
     result = subprocess.run(
         ["bash", "-c", script], cwd=tmp_path, capture_output=True, text=True, check=False,
         env={**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"},

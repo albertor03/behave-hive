@@ -12,6 +12,15 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "example"
+EXAMPLE_SCENARIOS = 24
+EXAMPLE_FEATURES = [
+    "features/csv/forms.feature",
+    "features/csv/mixed_and_tagged.feature",
+    "features/csv/special_characters.feature",
+    "features/login.feature",
+    "features/structure/background_and_rule.feature",
+    "features/structure/step_data.feature",
+]
 
 
 @pytest.fixture
@@ -41,10 +50,10 @@ def test_ok_parallel_and_sequential_produce_the_three_reports_with_the_same_ids(
     parallel = hive(example, "--parallel")
     assert parallel.returncode == 0, parallel.stdout + parallel.stderr
     data, found = scenarios(example)
-    assert len(found) == 7
-    assert len(data) == 1 and data[0]["uri"] == "features/login.feature"
+    assert len(found) == EXAMPLE_SCENARIOS
+    assert sorted(f["uri"] for f in data) == EXAMPLE_FEATURES
     reports = example / "reports"
-    assert len(list((reports / "allure-results").glob("*-result.json"))) == 7
+    assert len(list((reports / "allure-results").glob("*-result.json"))) == EXAMPLE_SCENARIOS
     assert (reports / "report.html").is_file()
     parallel_ids = [s["id"] for s in found]
 
@@ -65,7 +74,7 @@ def test_fail_expected_failure_has_an_error_message_and_a_screenshot(example):
 
 
 @pytest.mark.skipif(shutil.which("npx") is None, reason="npx is not installed")
-def test_allure_generate_reports_seven_results(example):
+def test_allure_generate_reports_every_result(example):
     assert hive(example, "--parallel").returncode == 0
     generated = subprocess.run(
         ["npx", "--yes", "allure@3", "generate", "reports/allure-results"],
@@ -74,7 +83,7 @@ def test_allure_generate_reports_seven_results(example):
     assert generated.returncode == 0, generated.stdout + generated.stderr
     summaries = list(example.rglob("summary.json"))
     assert summaries, generated.stdout
-    assert json.loads(summaries[0].read_text(encoding="utf-8"))["stats"]["total"] == 7
+    assert json.loads(summaries[0].read_text(encoding="utf-8"))["stats"]["total"] == EXAMPLE_SCENARIOS
 
 
 def test_keep_preserves_reports_when_a_test_fails(tmp_path, monkeypatch):
@@ -118,3 +127,49 @@ def test_diagnostics_failed_row_has_screenshot_attachment_summary_and_run_contex
     context = dict(re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", page))
     assert context["Mode"] == "parallel, 3 workers, scheme scenario"
     assert str(example) not in page and str(Path.home()) not in page
+
+
+@pytest.mark.parametrize("config", ["sequential.ini", "feature_scheme.ini", "pyproject.toml"])
+def test_every_config_example_runs_the_same_scenarios(example, config):
+    result = hive(example, "--config", f"configs/{config}")
+    assert result.returncode == 0, result.stdout + result.stderr
+    data, found = scenarios(example)
+    assert len(found) == EXAMPLE_SCENARIOS
+    assert sorted(f["uri"] for f in data) == EXAMPLE_FEATURES
+    assert len({s["id"] for s in found}) == EXAMPLE_SCENARIOS
+
+
+@pytest.mark.parametrize(
+    "tag, names",
+    [
+        ("@smoke", ["Sign in as admin -- @1.1 from a CSV file"]),
+        (
+            "@regression",
+            [
+                "Sign in as guest -- @2.1 written by hand",
+                "Sign in as other -- @3.1 from another CSV file, with read()",
+                "Sign in as admin -- @3.2 from another CSV file, with read()",
+            ],
+        ),
+    ],
+)
+def test_tags_pick_one_examples_table(example, tag, names):
+    result = hive(example, "--", f"--tags={tag}")
+    assert result.returncode == 0, result.stdout + result.stderr
+    _, found = scenarios(example)
+    assert sorted(s["name"] for s in found) == sorted(names)
+
+
+def test_csv_forms_cover_plain_path_and_both_read_quotes(example):
+    result = hive(example, "features/csv/forms.feature")
+    assert result.returncode == 0, result.stdout + result.stderr
+    _, found = scenarios(example)
+    assert sorted({s["name"].split(" -- ")[0] for s in found}) == [
+        "plain path - admin",
+        "plain path - other",
+        "read() with double quotes - admin",
+        "read() with double quotes - other",
+        "read() with single quotes - admin",
+        "read() with single quotes - other",
+    ]
+    assert len(found) == 6

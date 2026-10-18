@@ -180,6 +180,9 @@ $features
     });
   }
   function setOpen(open) {
+    Array.prototype.forEach.call(document.querySelectorAll("details.outline"), function (group) {
+      if (!group.hidden) { group.open = open; }
+    });
     scenarios.forEach(function (el) { if (!el.hidden) { el.open = open; } });
   }
   function copyText(text) {

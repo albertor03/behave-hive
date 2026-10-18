@@ -6,7 +6,7 @@ Feature: Login with data from CSV
     Then I see the message "<message>"
 
     Examples: valid credentials
-      | read('data/login.csv') |
+      | data/login.csv |
 
     Examples: written by hand
       | user  | password | message             |
@@ -14,4 +14,4 @@ Feature: Login with data from CSV
 
     @expected_fail
     Examples: fails on purpose
-      | read('data/login_fail.csv') |
+      | data/login_fail.csv |

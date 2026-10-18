@@ -214,3 +214,14 @@ def test_a_malformed_fragment_does_not_break_the_controls(tmp_path):
         assert tab.locator(".toolbar").is_visible()
         assert tab.locator("#search").input_value() == ""
         assert visible(tab) == 1
+
+
+def test_expand_and_collapse_all_include_outline_groups(tmp_path):
+    rows = [outline_row(1, "passed"), outline_row(2, "passed")]
+    with opened(tmp_path, [feature("Login", "features/c.feature", rows)]) as tab:
+        assert tab.locator("details.outline[open]").count() == 0
+        tab.click("#expand-all")
+        assert tab.locator("details.outline[open]").count() == 1
+        assert tab.locator("details.scenario[open]").count() == 2
+        tab.click("#collapse-all")
+        assert tab.locator("details.outline[open]").count() == 0

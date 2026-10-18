@@ -1,29 +1,69 @@
 # behave-hive
 
-A layer on top of [behave](https://github.com/behave/behave) 1.3.x that adds:
+Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read `Examples:` from CSV files and get Allure, Cucumber JSON and HTML reports in one run.
 
-- **Examples from CSV:** a Karate-style cell, `| read('data/users.csv') |`, under `Examples:`.
-- **Sequential or parallel runs:** chosen in `behave.ini` or on the command line.
-- **Consolidated reports:** Allure results, standard Cucumber JSON and a self-contained HTML report.
+- **Examples from CSV:** point an `Examples:` table at a file with its path, `| data/users.csv |`, or the equivalent `| read('data/users.csv') |`. CSV and hand-written tables can live in the same outline.
+- **Sequential or parallel runs:** set in the `[behave_hive]` section of `behave.ini`, or with `--parallel/--no-parallel`.
+- **Consolidated reports:** Allure results, standard Cucumber JSON and a self-contained HTML report with filters, metrics and screenshots.
 
-Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without CSV cells runs exactly as it does with behave.
+Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without CSV cells runs exactly as it does with behave. behave-hive complements behave; if you only need a parallel runner with its own report, [BehaveX](https://github.com/hrcorval/behavex) is another option.
 
-See [Project status and pending work](STATUS.md) for the verified local snapshot,
-story progress, integration state and remaining reviews/publication steps.
+**Contents:** [Installation](#installation) · [Quick start](#quick-start) · [Examples from CSV](#examples-from-csv) · [Running](#running) · [Configuration](#configuration) · [Reports](#reports) · [Examples](#examples) · [Limitations](#limitations) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Releasing](#releasing)
 
 ## Installation
 
-The current `0.1.0` checkout is not published yet. Install it from source with
-`pip install -e ".[allure,playwright]"` (or `.[dev,allure,playwright]` for development).
-The package-index commands below apply after publication.
+Install behave-hive in the same environment as your behave project, with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install behave-hive                 # or: uv pip install behave-hive
-pip install "behave-hive[allure]"       # adds allure-behave 2.16.2 for the Allure format
-pip install "behave-hive[playwright]"   # only needed to run the example
+uv add behave-hive                      # in a uv project; or: uv pip install behave-hive
+uv add "behave-hive[allure]"            # adds allure-behave 2.16.2 for the Allure format
+uv add "behave-hive[playwright]"        # only needed to run the example
 ```
 
-Requires Python 3.11 or newer. macOS and Linux are supported; Windows is not supported.
+pip works too: `pip install behave-hive`, `pip install "behave-hive[allure]"`.
+
+Requires Python 3.11 or newer. macOS and Linux are supported; Windows is not (see [Limitations](#limitations)). Run the commands in this guide with `uv run` (for example `uv run behave-hive run`), or activate the environment first.
+
+## Quick start
+
+`features/login.feature`:
+
+```gherkin
+Feature: Login
+
+  Scenario Outline: Login as <user>
+    Given I open the login page
+    When I sign in with user "<user>" and password "<password>"
+    Then I see the message "<message>"
+
+    Examples:
+      | data/login.csv |
+```
+
+`features/data/login.csv`:
+
+```csv
+user,password,message
+admin,1234,Welcome
+admin,wrong,Invalid credentials
+```
+
+```bash
+uv run behave-hive run --parallel -w 2
+```
+
+```text
+Examples: 0 inline, 1 from CSV
+  - features/data/login.csv
+Mode: parallel (2 workers, scheme scenario)
+batch 1 · worker 1 · 1 scenario · passed · 1.6s
+batch 2 · worker 2 · 1 scenario · passed · 1.6s
+1 feature · 2 scenarios (2 passed) · 6 steps (6 passed) · 1.7s
+```
+
+![HTML report overview: status, run context, durations and the feature table](docs/images/report-overview.png)
+
+Open `report.html` (project root by default) for the result; the Cucumber JSON, Allure results and logs are in `reports/`. The steps used here are in [`example/`](example/), which runs as is.
 
 ## Examples from CSV
 
@@ -36,7 +76,7 @@ Feature: Login
     Then I see the message "<message>"
 
     Examples: valid credentials
-      | read('data/login.csv') |
+      | data/login.csv |
 ```
 
 `data/login.csv`:
@@ -47,12 +87,26 @@ admin,1234,Welcome
 admin,wrong,Invalid credentials
 ```
 
-A table is read from CSV when its first row has **one cell** that is `read('path.csv')`, `read("path.csv")` or a bare path ending in `.csv`. Any other table is a regular, hand-written one. Both kinds can live in the same outline, each under its own `Examples:`, and each keeps its own tags:
+A table is read from CSV when its first row has **one cell** that is a path ending in `.csv`. That plain path is the default form:
+
+```gherkin
+    Examples:
+      | data/login.csv |
+```
+
+`read('path.csv')` and `read("path.csv")` mean exactly the same; use them if you prefer the explicit spelling:
+
+```gherkin
+    Examples:
+      | read('data/login.csv') |
+```
+
+Any other table is a regular, hand-written one. Both kinds can live in the same outline, each under its own `Examples:`, and each keeps its own tags:
 
 ```gherkin
     @smoke
     Examples: from a file
-      | read('data/login.csv') |
+      | data/login.csv |
 
     Examples: written by hand
       | user  | password | message             |
@@ -101,6 +155,22 @@ Every path belongs to a **features root**: the closest directory, walking up, th
 | `--formats LIST` | Any of `allure`, `cucumber`, `html`. |
 | `--config FILE` | Read `[behave_hive]` from this file only. |
 | `--keep-tmp` | Keep `results_dir/tmp/` (partial results, locations files). |
+
+### Parallel by scenario or by feature
+
+With `parallel = true`, behave-hive splits the suite into **units** and gives them to up to `workers` processes. `scheme` decides what a unit is:
+
+| `scheme` | A unit is | Use it when |
+|---|---|---|
+| `scenario` (default) | One scenario, or one row of a Scenario Outline (from CSV or written by hand). | Scenarios are independent. A file with 4 data rows runs as 4 units, in parallel. |
+| `feature` | One whole `.feature` file; its scenarios run in order in the same process. | Scenarios of a feature depend on each other, share an expensive `before_feature`, or use `@setup`/`@teardown`. The same 4-row file is 1 unit. |
+
+```bash
+behave-hive run --parallel --scheme scenario -w 4    # rows and scenarios spread over 4 processes
+behave-hive run --parallel --scheme feature -w 2     # one process per feature, 2 at a time
+```
+
+The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `chunk`); [`example/configs/`](example/configs/) has a ready-made file for each case. A scenario's own steps never run in parallel. `chunk` sets how many units each process receives (`0` shares them evenly). `before_all` and `after_all` in `environment.py` run once per process, so use [`BEHAVE_HIVE_WORKER`](#worker-identification) to keep ports or users apart.
 
 Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or CSV error, `130` interrupted with Ctrl+C. When nothing matches, `No scenarios found` is printed and the exit code is 0.
 
@@ -208,6 +278,14 @@ versions, `mode` (`parallel` or `sequential`), `workers` and `scheme`.
   as `#search=...&status=...&tag=...`, for example `report.html#status=failed&tag=@smoke`.
   Unknown values are ignored.
 
+A failed scenario opens with its error headline, a **Copy error** button, the worker and batch that ran it, and the screenshot taken by your `after_step` hook (the traceback below the steps is hidden in this picture):
+
+![A failed scenario with its steps and the screenshot attached to the failed step](docs/images/report-failure.png)
+
+Filters live in the address, so a filtered view can be shared; `#status=passed&tag=@smoke` shows this:
+
+![The toolbar with the status and tag filters applied and one matching scenario](docs/images/report-filters.png)
+
 ### Privacy and security of the HTML
 
 The HTML carries a default-deny Content-Security-Policy with the hash of its exact
@@ -222,29 +300,30 @@ becomes the original path, the project directory becomes relative and your home 
 behave features -f behave_hive.formatters.cucumber:CucumberJSONFormatter -o out.json
 ```
 
-## Example
+## Examples
 
-`example/` is a Playwright login test with CSV data, one hand-written table and a table that fails on purpose (`@expected_fail`, excluded by `default_tags`; a failed step attaches a screenshot).
+[`example/`](example/) is a runnable project (Playwright and a local login page) with one example for each feature. Its [README](example/README.md) lists them with the command to run each one.
+
+| Example | Shows |
+|---|---|
+| [`features/login.feature`](example/features/login.feature) | CSV table, hand-written table and a table that fails on purpose (screenshot as evidence). |
+| [`features/csv/forms.feature`](example/features/csv/forms.feature) | The plain path (the default form), `read('...')` with single and double quotes, and a shared file through `..`. |
+| [`features/csv/mixed_and_tagged.feature`](example/features/csv/mixed_and_tagged.feature) | CSV (plain path and `read()`) and hand-written tables in one outline, each with its own tags. |
+| [`features/csv/special_characters.feature`](example/features/csv/special_characters.feature) | Pipes, commas and percent signs inside cells. |
+| [`features/structure/background_and_rule.feature`](example/features/structure/background_and_rule.feature) | `Background` and `Rule` with CSV `Examples:`. |
+| [`features/structure/step_data.feature`](example/features/structure/step_data.feature) | Step tables and docstrings, never read as `Examples:`. |
+| [`configs/`](example/configs/) | Sequential, `scheme = feature` and TOML configurations. |
 
 ```bash
-pip install -e ".[dev,allure,playwright]"
-python -m playwright install chromium
-cd example
-behave-hive run                         # parallel, as configured in behave.ini
-behave-hive run --no-parallel
-behave-hive run -- --tags=@expected_fail
+git clone https://github.com/albertor03/behave-hive && cd behave-hive/example
+uv venv && uv pip install "behave-hive[allure,playwright]"
+uv run python -m playwright install chromium
+uv run behave-hive run                               # as configured in behave.ini
+uv run behave-hive run --config configs/sequential.ini
+uv run behave-hive run -- --tags=@smoke              # only the @smoke Examples table
 ```
 
-## Benchmark
-
-Informational. `example/` with a 12-row CSV plus the hand-written row (13 scenarios, each about 0.3 s), median of 3 runs, wall-clock seconds, macOS, Python 3.14, Chromium headless:
-
-| Mode | Time |
-|---|---|
-| `behave-hive run --no-parallel` | 4.7 s |
-| `behave-hive run --parallel -w 4` | 4.0 s |
-
-The time goes into starting Python, behave and Chromium once per process and into the steps themselves, not into behave-hive. With scenarios this short parallelism barely pays off; it matters for suites where the steps dominate.
+Gherkin in other languages works too: the `Examples:` keyword follows the feature's language, as shown in [`tests/fixtures/i18n/`](tests/fixtures/i18n/).
 
 ## Limitations
 
@@ -252,8 +331,8 @@ The time goes into starting Python, behave and Chromium once per process and int
 - **`Path(__file__)` in steps:** steps run through symlinks in the expanded tree. Use `Path(__file__).resolve()` to reach files next to the original step.
 - **Unbalanced batches:** units are split into consecutive chunks. Use `chunk = 1` for dynamic balancing, at the cost of one process per unit.
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
-- **POSIX only:** the runner uses symlinks and process groups; Windows is not supported.
-- **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV.
+- **POSIX only (macOS and Linux):** the run lock uses `fcntl.flock`, interruption signals whole process groups (`os.killpg`) so browsers started by a step do not survive Ctrl+C, and the expanded copy of your features links every non-feature file with symlinks. None of these exist, or work without special privileges, on Windows. CI covers Linux and macOS only. WSL runs Linux and should work, but it is not tested.
+- **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV (JSON files are planned, see the [Roadmap](#roadmap)).
 - **CSV access is not sandboxed:** a feature may reference any CSV readable by the
   current user, including paths with `..`; its rows can appear in reports.
 - **Retained run configuration:** `--keep-tmp` preserves private plans and
@@ -268,154 +347,20 @@ The time goes into starting Python, behave and Chromium once per process and int
 - **Expansion race window:** destination checks are repeated before deletion
   and marker creation. This narrows, but does not eliminate, filesystem races.
 
+## Roadmap
+
+Next on the list:
+
+- **Windows support:** replace the POSIX-only pieces described under [Limitations](#limitations) (file lock, process groups and symlinks) and add Windows to CI.
+- **JSON data files:** read `Examples:` from a `.json` file, next to CSV, with the same plain-path form.
+
 ## Contributing
 
-Install the development tools with `pip install -e ".[dev,allure]"`. Work test-first
-on a feature branch from `develop`; keep versioned content in English.
-
-```bash
-ruff check src tests
-pylint src
-pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=json:coverage.json
-pip-audit --local --skip-editable
-```
-
-Ruff checks lint, security rules and McCabe complexity (maximum 10). Temporary
-module-level C901 exceptions in `pyproject.toml` remain until HU-10 removes the
-complexity debt; the historical baseline had four findings. Pylint rejects duplicated blocks of six matching lines in
-source; `pylint tests` is informational. Tools are declared in the `dev` extra.
-
-Coverage requires **100% statements and 100% branches** across the entire
-`src/behave_hive` library, including future modules and worker/CLI subprocesses.
-Scripts, tests, examples and dependencies are outside this gate. Do not narrow
-the source list or add exclusions to hide untested library code. `coverage.json`
-reports statement counts (`covered_lines`/`num_statements`, `missing_lines`) and
-branch counts (`covered_branches`/`num_branches`, `missing_branches`) separately:
-both missing counts must be exactly zero. The terminal's combined percentage is
-not the branch percentage; rounded percentages alone are not proof of completion.
-CI also rejects excluded library lines and prints both exact counter sets.
-
-### CI jobs and artifacts
-
-The CI workflow runs on pushes and pull requests to `main` and `develop`:
-
-| Job | Purpose |
-| --- | --- |
-| `unit` | Linux and macOS, Python 3.11, 3.12, 3.13 and 3.14 |
-| `e2e` | Chromium example and HTML report interactions |
-| `packaging` | Build and install the wheel with pip and uv |
-| `quality` | Ruff, pylint duplicate-code, pip-audit |
-| `coverage` | Unit suite: exactly 100% library statements and branches, including subprocesses |
-| `actionlint` | Validate all workflow files and expressions |
-
-Runs have timeouts and superseded CI runs are cancelled. Action references use
-release commit SHAs; pip and Playwright downloads are cached. On a failed run,
-open the run's **Artifacts** section: `e2e-reports` contains the example's HTML,
-Cucumber JSON and Allure results by test name; `coverage` contains `.coverage`,
-`coverage.xml`, `coverage.txt` and `coverage.json` with missing statement/branch
-locations. Both artifacts are retained for seven days, including on
-failure. To preserve example reports locally, set
-`BEHAVE_HIVE_E2E_KEEP=/absolute/path/to/evidence` before running e2e tests.
-Artifacts retain report contents, including inputs, tracebacks and screenshots.
-
-### Security
-
-CodeQL scans Python on pushes, pull requests and Mondays at 03:17 UTC. Its job
-waits for processing and rejects open high/critical-severity findings on the
-scanned ref. Dependency review rejects high-severity vulnerable dependencies and
-licenses outside the configured allow-list on pull requests. CodeQL and dependency
-review are enabled for public repositories; private repositories skip these jobs
-until the appropriate GitHub security plan is configured.
-
-Dependabot proposes grouped weekly updates for pip and GitHub Actions against
-`develop`. It only proposes patch updates to `allure-behave`, whose internal API
-is used by the formatter. Updates go through the regular pull request checks.
+Pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to set up the project, the checks that must pass and how CI works. [AGENTS.md](AGENTS.md) describes the layout and the conventions.
 
 ## Releasing
 
-Publishing goes directly to **PyPI** through Trusted Publishing. A published
-version and its filenames cannot be replaced, even after deletion.
-
-### One-time setup (requires maintainer approval)
-
-After creating the public repository and observing the first green CI run, review
-the exact commands and JSON in [apply_settings.sh](.github/scripts/apply_settings.sh).
-With explicit maintainer approval, run `bash .github/scripts/apply_settings.sh`.
-It requires all eight `unit (OS, Python)` matrix checks and `e2e`, `packaging`,
-`quality`, `coverage`, `actionlint` on both `main` and `develop`, requires up-to-date
-pull requests (zero approving code reviews for a solo maintainer), enforces these
-rules for administrators and disallows force pushes and deletion.
-
-The same script creates environment `pypi` with reviewer `albertor03`, manual
-approval without administrator bypass, and deployment policy `v*` of type `tag`.
-Self-review is permitted so the solo maintainer can approve their own release.
-Review existing environment policies before reapplying; the script is intended
-for initial setup and does not remove existing policies.
-
-The maintainer must also register a pending trusted publisher in the PyPI web UI:
-
-| Field | Value |
-| --- | --- |
-| PyPI project | `behave-hive` |
-| GitHub owner | `albertor03` |
-| Repository | `behave-hive` |
-| Workflow filename | `release.yml` |
-| Environment | `pypi` |
-
-No PyPI API token or password is stored. Inspect settings after applying them:
-
-```bash
-gh api repos/albertor03/behave-hive/branches/main/protection
-gh api repos/albertor03/behave-hive/branches/develop/protection
-gh api repos/albertor03/behave-hive/environments/pypi
-gh api repos/albertor03/behave-hive/environments/pypi/deployment-branch-policies
-```
-
-### Prepare and rehearse
-
-1. Bump `project.version` in `pyproject.toml` on `develop` (and version assertions
-   in the tests), and add `## [X.Y.Z] - YYYY-MM-DD` with notes to `CHANGELOG.md`.
-2. Merge `develop` into `main` through a passing pull request.
-3. Create the matching tag `vX.Y.Z` on that commit; accepted prereleases are
-   `vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN`, matching the project version exactly.
-4. With maintainer approval, push the tag and watch the Release workflow.
-   Verification checks the tag format/version, its checked-out commit's
-   reachability from `origin/main`, and a real date on the changelog section.
-5. For the **first release**, leave the `pypi` deployment unapproved, cancel that
-   initial run, and start the manual rehearsal below. The single release
-   concurrency group must be free before the rehearsal can start.
-
-In Actions, choose **Release -> Run workflow**, select the existing release **tag**
-(not a branch), and keep `dry_run` checked. Equivalently:
-
-```bash
-gh workflow run release.yml --ref vX.Y.Z -f dry_run=true
-gh run list --workflow release.yml
-gh run view RUN_ID
-```
-
-The dry run verifies, builds the wheel and sdist once, checks metadata with
-`twine check`, installs the wheel in clean environments with pip and uv, and
-compares `behave-hive --version` to the tag. Download artifact `dist` to inspect
-the exact files; `publish` and `github-release` must be skipped.
-
-After a successful rehearsal, rerun the cancelled initial run (or manually run
-the same tag with `dry_run=false`), watch all checks pass, and explicitly approve
-the `pypi` deployment. The publish job alone gets OIDC permission. Only after
-publication does GitHub Release receive write permission and attach the same
-wheel/sdist and the version's changelog notes. Release runs never auto-cancel.
-
-### Recovery
-
-If verification, build or installation fails, nothing is published. Correct the
-problem through `develop` and `main` and rehearse again. If publishing fails,
-first inspect PyPI to determine whether any file was accepted. If **nothing** was
-published, correct the configuration and rerun the failed job; a tag may only be
-replaced with explicit maintainer approval before any files are published. If
-any file was accepted, never try to replace that version: complete the release
-record for those exact artifacts or prepare a new version. If only GitHub
-Release failed, rerun that job with the original artifacts rather than rebuilding
-or republishing. Do not use `skip-existing` to conceal a partial publication.
+Releases are tagged and published to PyPI by a workflow; the maintainer's checklist is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## License
 
