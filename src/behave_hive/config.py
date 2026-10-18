@@ -53,7 +53,7 @@ class HiveConfig:
     chunk: int
     results_dir: Path
     formats: tuple[str, ...]
-    work_dir: Path
+    work_dir: Path | None  # deprecated and ignored; set only when configured, to warn about it
     behave_args: tuple[str, ...]
     paths: tuple[str, ...]
     config_file: Path | None
@@ -135,7 +135,7 @@ def _defaults() -> dict[str, Any]:
         "chunk": 0,
         "results_dir": Path("reports"),
         "formats": ("cucumber", "html"),
-        "work_dir": Path(".behave-hive"),
+        "work_dir": None,
         "behave_args": (),
         "paths": ("features",),
         "report_name": None,

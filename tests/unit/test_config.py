@@ -36,7 +36,7 @@ def test_defaults_without_any_file(project):
         chunk=0,
         results_dir=Path("reports"),
         formats=("cucumber", "html"),
-        work_dir=Path(".behave-hive"),
+        work_dir=None,
         behave_args=(),
         paths=("features",),
         config_file=None,

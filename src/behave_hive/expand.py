@@ -324,7 +324,7 @@ def expand_feature_text(text: str, feature_path: Path, lang: str) -> ExpandResul
 
 
 def _validate_destination(src: Path, dst: Path) -> None:
-    """Reject a `dst` that could make `expand_tree` delete something it should not."""
+    """Reject a `dst` that could make `expand_features` delete something it should not."""
     if dst.is_symlink():
         raise HiveError(f"expansion destination is a symlink: {dst}")
     resolved = dst.resolve()

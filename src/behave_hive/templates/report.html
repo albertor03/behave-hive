@@ -147,7 +147,11 @@ $features
       if (ok) { visible += 1; }
     });
     Array.prototype.forEach.call(document.querySelectorAll("details.outline"), function (group) {
-      group.hidden = !group.querySelector("details.scenario:not([hidden])");
+      var rows = group.querySelectorAll("details.scenario:not([hidden])").length;
+      var count = group.querySelector(".count");
+      var total = count.getAttribute("data-total");
+      group.hidden = !rows;
+      count.textContent = (String(rows) === total ? "" : rows + " of ") + total + " rows";
     });
     features.forEach(function (section) {
       section.hidden = !section.querySelector("details.scenario:not([hidden])");

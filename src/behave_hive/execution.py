@@ -20,6 +20,8 @@ from behave_hive.batching import Batch
 from behave_hive.summary import FAILING
 
 GRACE_SECONDS = 5
+# Wait in short steps: on Windows a blocking wait delays Ctrl+C until it returns
+POLL_SECONDS = 0.2
 
 
 @dataclass(frozen=True)
@@ -227,7 +229,9 @@ def execute_batches(
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
     futures = [executor.submit(pool.run, job) for job in jobs]
     try:
-        wait(futures)
+        pending = futures
+        while pending:
+            _, pending = wait(pending, timeout=POLL_SECONDS)
     except KeyboardInterrupt:
         result.interrupted = True
         pool.interrupt(kill_group, grace)

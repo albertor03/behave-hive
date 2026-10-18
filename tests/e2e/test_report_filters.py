@@ -175,6 +175,10 @@ def test_status_filter_works_inside_an_outline_group(tmp_path):
         tab.select_option("#status-filter", "passed")
         assert visible(tab) == 2
         assert tab.locator("details.outline:not([hidden])").count() == 1
+        assert "2 of 3 rows" in tab.locator("details.outline > summary").inner_text()
+        tab.select_option("#status-filter", "")
+        assert "3 rows · 1 failed" in tab.locator("details.outline > summary").inner_text()
+        assert "of 3 rows" not in tab.locator("details.outline > summary").inner_text()
         tab.fill("#search", "no such scenario")
         assert visible(tab) == 0
         assert tab.locator("details.outline:not([hidden])").count() == 0
