@@ -22,13 +22,26 @@ try:
     from allure_commons.model2 import StatusDetails
     from allure_commons.utils import get_testplan, now
     from behave.formatter.base import Formatter
-except ImportError as exc:  # pragma: no cover - exercised by monkeypatching sys.modules
+except ImportError as exc:
     raise HiveError('the allure format needs allure-behave: pip install "behave-hive[allure]"') from exc
 
+from behave_hive.privacy import scrub, user_home
 from behave_hive.roots import PathMap
 from behave_hive.selection import SelectionSnapshot
 
 PATH_MAP_KEY = "behave_hive.path_map"
+
+
+class HiveAllureFileLogger(AllureFileLogger):
+    """Sanitize diagnostics before any result or hook container is persisted."""
+
+    def __init__(self, report_dir, listener):
+        super().__init__(report_dir)
+        self.listener = listener
+
+    def _report_item(self, item):
+        self.listener.scrub_result(item)
+        super()._report_item(item)
 
 
 class HiveAllureListener(AllureListener):
@@ -39,6 +52,18 @@ class HiveAllureListener(AllureListener):
         raw = json.loads(behave_config.userdata.get(PATH_MAP_KEY) or "{}")
         self.path_map = PathMap({Path(expanded): Path(original) for expanded, original in raw.items()})
         self.has_path_map = bool(raw)
+
+    def scrub_result(self, result):
+        """Scrub status details recursively, including nested steps and fixtures."""
+        details = getattr(result, "statusDetails", None)
+        if details is not None:
+            for key in ("message", "trace"):
+                value = getattr(details, key)
+                if value is not None:
+                    setattr(details, key, scrub(value, self.path_map, Path.cwd(), user_home()))
+        for key in ("steps", "befores", "afters"):
+            for child in getattr(result, key, []):
+                self.scrub_result(child)
 
     def start_scenario(self, scenario):
         super().start_scenario(scenario)
@@ -81,7 +106,7 @@ class AllureFormatter(BaseAllureFormatter):
     def __init__(self, stream_opener, config):
         Formatter.__init__(self, stream_opener, config)
         self.listener = HiveAllureListener(config)
-        self.file_logger = AllureFileLogger(self.stream_opener.name)
+        self.file_logger = HiveAllureFileLogger(self.stream_opener.name, self.listener)
         allure_commons.plugin_manager.register(self.listener)
         allure_commons.plugin_manager.register(self.file_logger)
         self.testplan = get_testplan()

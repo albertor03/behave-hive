@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+These changes are implemented locally; review/integration and remote release
+verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
+
+### Added
+
+- HTML-only `report_name` and `report_path` settings, project-name fallback,
+  escaped title/heading and atomic writes to nested or absolute output paths.
+- Declared development quality tools, regression tests for the gates and
+  machine-readable coverage evidence including worker/CLI subprocesses.
+- Hardened CI, security scanning/update workflows and a tested release pipeline
+  with Trusted Publishing configuration and an approval-gated setup script.
+  Remote execution, settings application and publication remain pending.
+
+### Changed
+
+- **Breaking:** the default HTML destination is now `<project-root>/report.html`.
+  Set `report_path = reports/report.html` to preserve the earlier location.
+  JSON, Allure results and logs continue to use `results_dir`.
+- Library coverage now requires exactly 100% statements and branches, with zero
+  missing counters, all library modules included and JSON retained by CI.
+- Removed a redundant CLI dispatch fallback after proving the parser accepts
+  only the required `run` and `expand` commands.
+
+### Security
+
+- Rewrite expanded, working-directory and home prefixes in merged diagnostics
+  and Allure status details, including steps and hook containers.
+- Add a default-deny HTML CSP with the exact inline script's SHA-256 hash.
+- Check process liveness before interruption signals under the process lock.
+- Revalidate expansion destinations before deletion and marker creation.
+- Mark generated HTML with a generator marker and delete only a marked previous
+  report at the start of a run, so an aborted run never leaves a stale report.
+- Open the results lock without following symlinks, create per-process
+  temporary files for atomic writes, expand `~` in `report_path`, resolve HTML
+  settings only when `html` is a format and tolerate a missing home directory.
+- Create private run configuration files exclusively with owner-only permissions
+  and restrict new/existing lock files. Accepted limitations are documented in
+  the README.
+
 ## [0.1.0] - Unreleased
 
 ### Added

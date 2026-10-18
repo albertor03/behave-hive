@@ -2,11 +2,16 @@ import base64
 import hashlib
 import json
 import re
+from io import StringIO
 from types import SimpleNamespace
 
 import jsonschema
 import pytest
+from behave.configuration import Configuration
+from behave.formatter.base import StreamOpener
+from behave.parser import parse_feature
 
+from behave_hive.formatters.cucumber import CucumberJSONFormatter, relative_uri
 from behave_hive.status import scenario_status
 
 FORMATTER = "behave_hive.formatters.cucumber:CucumberJSONFormatter"
@@ -29,6 +34,40 @@ def scenarios(data):
 
 def tag_pairs(element):
     return [(t["name"], t["line"]) for t in element["tags"]]
+
+
+@pytest.fixture
+def stream_formatter():
+    stream = StringIO()
+    formatter = CucumberJSONFormatter(StreamOpener(stream=stream), Configuration([], load_config=False))
+    return formatter, stream
+
+
+def test_absolute_uri_inside_cwd_becomes_relative_and_outside_stays_absolute(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert relative_uri(str(tmp_path / "features/a.feature")) == "features/a.feature"
+    assert relative_uri(str(tmp_path.parent / "other/a.feature")) == (tmp_path.parent / "other/a.feature").as_posix()
+
+
+def test_stream_formatter_ignores_early_attachments_and_eof_without_a_feature(stream_formatter):
+    formatter, stream = stream_formatter
+    formatter.embedding("image/png", b"early")
+    formatter.eof()
+    formatter.close()
+    assert json.loads(stream.getvalue()) == []
+    assert not stream.closed
+
+
+def test_stream_formatter_omits_features_without_selected_scenarios(stream_formatter, cucumber_schema):
+    formatter, stream = stream_formatter
+    feature = parse_feature('Feature: F\n  Scenario: s\n    Given value "ok"\n', filename="features/a.feature")
+    formatter.config = Configuration(["--tags=@missing"], load_config=False)
+    formatter.feature(feature)
+    formatter.eof()
+    formatter.close()
+    data = json.loads(stream.getvalue())
+    assert data == []
+    jsonschema.validate(data, cucumber_schema)
 
 
 # --- 5.3 structure ---------------------------------------------------------------
@@ -570,6 +609,38 @@ def test_hooks_error_in_after_scenario_adds_an_after_element(project):
     (after,) = scenario["after"]
     assert "after boom" in after["result"]["error_message"]
     assert after["match"] == {"location": "environment.py"}
+
+
+@pytest.mark.parametrize("cleanup", [False, True])
+def test_failed_step_with_hook_or_cleanup_failure_does_not_add_a_duplicate_hook(project, cucumber_schema, cleanup):
+    registration = (
+        "def before_scenario(context, scenario):\n    context.add_cleanup(boom)\n"
+        if cleanup else "def after_scenario(context, scenario):\n    boom()\n"
+    )
+    project.write(
+        "features/environment.py",
+        'def boom():\n    raise RuntimeError("secondary failure")\n\n' + registration,
+    )
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "bad"\n')
+    data = run_json(project)
+    jsonschema.validate(data, cucumber_schema)
+    (scenario,) = scenarios(data)
+    assert internal(scenario)["status"] == "failed"
+    assert "before" not in scenario and "after" not in scenario
+    (failed_step,) = scenario["steps"]
+    message = failed_step["result"]["error_message"]
+    assert message.count("AssertionError: unexpected value: bad") == 1
+    assert message.count("Traceback (most recent call last):") == 1
+
+
+def test_verbose_error_keeps_the_existing_traceback_without_duplicating_it(project, cucumber_schema):
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "bad"\n')
+    data = run_json(project, "--verbose")
+    jsonschema.validate(data, cucumber_schema)
+    (scenario,) = scenarios(data)
+    message = scenario["steps"][0]["result"]["error_message"]
+    assert message.count("Traceback (most recent call last):") == 1
+    assert message.count("AssertionError: unexpected value: bad") == 1
 
 
 def test_embeddings_attachment_is_added_to_the_step_that_made_it(project):

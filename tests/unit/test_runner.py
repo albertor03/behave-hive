@@ -1,4 +1,6 @@
 import json
+import os
+import stat
 import threading
 import time
 from pathlib import Path
@@ -7,13 +9,17 @@ import pytest
 
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
+from behave_hive.errors import HiveError
+from behave_hive.html_report import REPORT_MARKER
 from behave_hive.runner import (
     build_command,
     build_plan,
     clean_managed,
     execute_batches,
     prepare_jobs,
+    remove_stale_report,
     remove_tmp,
+    write_text_atomically,
 )
 
 ROOT = Path("/proj/features")
@@ -302,3 +308,83 @@ def test_path_map_reaches_every_plan_of_prepare_jobs(tmp_path):
     jobs = prepare_jobs([batch(1), batch(2)], tmp_path, [], allure=False, path_map={expanded: original})
     for job in jobs:
         assert json.loads(job.plan_path.read_text())["path_map"] == {str(expanded): str(original)}
+
+
+def test_plan_permissions_are_owner_only_even_with_a_permissive_umask(tmp_path):
+    mask = os.umask(0)
+    try:
+        plan_path = build_plan(batch(), tmp_path, ["-D", "secret=value"], allure=False)
+    finally:
+        os.umask(mask)
+    plan = json.loads(plan_path.read_text())
+    assert stat.S_IMODE(plan_path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(plan_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(Path(plan["locations_file"]).stat().st_mode) == 0o600
+
+
+def test_plan_permissions_reject_an_existing_locations_file_without_overwriting(tmp_path):
+    target = tmp_path / "tmp"
+    target.mkdir()
+    locations = target / "batch-1.locations"
+    locations.write_text("keep")
+    with pytest.raises(HiveError, match="cannot write private run file"):
+        build_plan(batch(), tmp_path, [], allure=False)
+    assert locations.read_text() == "keep"
+
+
+def test_atomic_write_does_not_touch_another_runs_temporary_file(tmp_path):
+    other = tmp_path / "report.html.tmp"
+    other.write_text("half written by another run", encoding="utf-8")
+
+    write_text_atomically(tmp_path / "report.html", "<html>mine</html>")
+
+    assert (tmp_path / "report.html").read_text(encoding="utf-8") == "<html>mine</html>"
+    assert other.read_text(encoding="utf-8") == "half written by another run"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["report.html", "report.html.tmp"]
+
+
+def test_stale_report_generated_by_behave_hive_is_removed(tmp_path):
+    report = tmp_path / "report.html"
+    report.write_text(f'<html><head><meta name="generator" content="{REPORT_MARKER}"></head></html>', encoding="utf-8")
+    remove_stale_report(report)
+    assert not report.exists()
+
+
+@pytest.mark.parametrize("content", ["<html>mine</html>", "", REPORT_MARKER[::-1]])
+def test_file_without_the_marker_is_never_removed(tmp_path, content):
+    report = tmp_path / "report.html"
+    report.write_text(content, encoding="utf-8")
+    remove_stale_report(report)
+    assert report.read_text(encoding="utf-8") == content
+
+
+def test_marker_beyond_the_head_of_the_file_does_not_count(tmp_path):
+    report = tmp_path / "notes.html"
+    report.write_text("x" * 4096 + REPORT_MARKER, encoding="utf-8")
+    remove_stale_report(report)
+    assert report.exists()
+
+
+def test_stale_report_cleanup_ignores_missing_files_directories_and_symlinks(tmp_path):
+    remove_stale_report(tmp_path / "missing.html")
+    folder = tmp_path / "folder.html"
+    folder.mkdir()
+    remove_stale_report(folder)
+    assert folder.is_dir()
+    real = tmp_path / "real.html"
+    real.write_text(REPORT_MARKER, encoding="utf-8")
+    link = tmp_path / "link.html"
+    link.symlink_to(real)
+    remove_stale_report(link)
+    assert link.is_symlink() and real.exists()
+
+
+def test_stale_report_cleanup_ignores_unreadable_files(tmp_path):
+    report = tmp_path / "report.html"
+    report.write_text(REPORT_MARKER, encoding="utf-8")
+    report.chmod(0)
+    try:
+        remove_stale_report(report)
+    finally:
+        report.chmod(0o600)
+    assert report.exists()

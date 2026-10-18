@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
 from html import escape
 from string import Template
@@ -13,13 +15,17 @@ IMAGE_TYPE = re.compile(r"^image/[A-Za-z0-9.+-]+$")
 BASE64 = re.compile(r"^[A-Za-z0-9+/=]*$")
 SLOWEST = 5
 
+REPORT_MARKER = "behave-hive-report-4f9c2e7a"
+
 PAGE = Template(
     """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>behave-hive report</title>
+<meta name="generator" content="$marker">
+<!--CSP-->
+<title>$report_name</title>
 <style>
 :root {
   --bg: #ffffff; --fg: #1d2330; --muted: #5d6677; --border: #d9dde6; --card: #f6f7fa; --accent: #3a5bd9;
@@ -101,7 +107,7 @@ label.zoom input:checked + img { max-width: 100%; max-height: none; cursor: zoom
 </head>
 <body>
 <main>
-<h1>behave-hive report</h1>
+<h1>$report_name</h1>
 <p class="totals">$totals</p>
 <div class="statusbar">$statusbar</div>
 <section class="metrics">
@@ -324,7 +330,9 @@ def _metrics(summary: Summary, stats: list[tuple[dict, dict]], pairs: list[tuple
     )
 
 
-def render(report: Report, summary: Summary, duration: float) -> str:
+def render(
+    report: Report, summary: Summary, duration: float, *, report_name: str = "behave-hive report"
+) -> str:
     """The report page for `report`; every text is escaped and images are validated."""
     stats = [(feature, _stats(feature)) for feature in report.features]
     pairs = [(f, b, s) for f in report.features for b, s in _pairs(f["elements"])]
@@ -348,7 +356,9 @@ def render(report: Report, summary: Summary, duration: float) -> str:
         + "</section>"
         for feature in report.features
     )
-    return PAGE.substitute(
+    page = PAGE.substitute(
+        marker=REPORT_MARKER,
+        report_name=escape(report_name),
         totals=escape(format_summary(summary, duration)),
         statusbar=statusbar,
         metrics=_metrics(summary, stats, pairs),
@@ -358,3 +368,7 @@ def render(report: Report, summary: Summary, duration: float) -> str:
         tag_options="".join(f'<option value="{escape(t)}">{escape(t)}</option>' for t in tags),
         features=sections,
     )
+    script = re.search(r"<script>(.*?)</script>", page, re.S)[1]
+    digest = base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii")
+    policy = f"default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'sha256-{digest}'"
+    return page.replace("<!--CSP-->", f'<meta http-equiv="Content-Security-Policy" content="{policy}">', 1)

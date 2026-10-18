@@ -1,7 +1,8 @@
 import base64
+import hashlib
 import re
 
-from behave_hive.html_report import render
+from behave_hive.html_report import REPORT_MARKER, render
 from behave_hive.merge import Report
 from behave_hive.summary import summarize
 
@@ -228,3 +229,61 @@ def test_is_a_complete_document_with_one_details_per_scenario():
 def test_empty_report_renders():
     page = html([])
     assert "0 scenarios" in page and "<table" in page
+
+
+def test_background_steps_are_paired_with_only_the_following_scenario():
+    background = {
+        "type": "background", "keyword": "Background", "name": "Shared", "line": 2,
+        "steps": [step("shared setup", duration=1_000_000_000)],
+    }
+    page = html([feature([
+        background, scenario("With setup", steps=[step("first action", duration=2_000_000_000)]),
+        scenario("Without setup", steps=[step("second action", duration=500_000_000)]),
+    ])])
+    first, second = re.findall(r'<details class="scenario".*?</details>', page, re.S)
+    assert first.index("shared setup") < first.index("first action")
+    assert "3.00s" in first
+    assert "shared setup" not in second
+    assert "0.50s" in second
+    assert "2 scenarios" in page and "3 steps" in page
+
+
+def test_report_name_sets_both_document_title_and_heading():
+    report = Report([])
+    page = render(report, summarize(report), 0.0, report_name="Portal QA")
+    assert "<title>Portal QA</title>" in page
+    assert "<h1>Portal QA</h1>" in page
+
+
+def test_report_name_is_escaped_in_title_and_heading():
+    report = Report([])
+    page = render(report, summarize(report), 0.0, report_name='<script>alert("x")</script>')
+    assert '<script>alert("x")</script>' not in page
+    assert "<title>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</title>" in page
+    assert "<h1>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</h1>" in page
+
+
+def test_report_name_direct_render_default_is_preserved():
+    page = html([])
+    assert "<title>behave-hive report</title>" in page
+    assert "<h1>behave-hive report</h1>" in page
+
+
+def test_csp_hash_matches_the_exact_emitted_script():
+    page = html([feature([scenario("<script>hostile</script>")])])
+    policy = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)"', page)
+    assert policy
+    script = re.search(r"<script>(.*?)</script>", page, re.S).group(1)
+    digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+    assert f"script-src 'sha256-{digest}'" in policy.group(1)
+    assert "default-src 'none'" in policy.group(1)
+    assert "img-src data:" in policy.group(1)
+    assert "style-src 'unsafe-inline'" in policy.group(1)
+    assert policy.start() < page.index("<title>")
+
+
+def test_report_carries_the_generator_marker_in_the_head():
+    page = html([])
+    head = page[: page.index("</head>")]
+    assert f'<meta name="generator" content="{REPORT_MARKER}">' in head
+    assert REPORT_MARKER == "behave-hive-report-4f9c2e7a"

@@ -1,6 +1,11 @@
 """Contract for the quality and coverage jobs; extended by the Actions change."""
 
+import json
+import os
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -58,3 +63,51 @@ def test_diagnostic_artifacts_are_uploaded_even_on_failure():
         assert "if: always()" in body and "retention-days: 7" in body
     assert "BEHAVE_HIVE_E2E_KEEP:" in text
     assert "coverage.txt" in text and ".coverage" in text
+
+
+def coverage_job():
+    text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    return re.search(r"^  coverage:\n(.*?)(?=^  [\w-]+:|\Z)", text, re.M | re.S).group(1)
+
+
+def test_exact_coverage_evidence_is_generated_checked_and_always_retained():
+    body = coverage_job()
+    assert 'python-version: "3.14"' in body
+    assert "set -o pipefail" in body
+    assert "--cov-report=json:coverage.json" in body
+    assert "| tee coverage.txt" in body
+    check = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
+    assert check and "if: always()" in check.group(1)
+    upload = body.split("      - uses: actions/upload-artifact@", 1)[1]
+    assert "if: always()" in upload and "retention-days: 7" in upload
+    for artifact in (".coverage", "coverage.xml", "coverage.txt", "coverage.json"):
+        assert f"            {artifact}\n" in upload
+    assert body.index("--cov-report=json:coverage.json") < check.start() < body.index("actions/upload-artifact@")
+
+
+@pytest.mark.parametrize("gap", ["statement", "branch", "excluded", "missing-report", "complete"])
+def test_ci_counter_check_uses_exact_counts_and_preserves_failure(tmp_path, gap):
+    body = coverage_job()
+    step = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
+    assert step, "CI needs an always-run exact counter check"
+    script = textwrap.dedent(step.group(1).split("run: |\n", 1)[1])
+    totals = {
+        "covered_lines": 100_000, "num_statements": 100_000, "missing_lines": 0,
+        "covered_branches": 80, "num_branches": 80, "missing_branches": 0, "excluded_lines": 0,
+    }
+    if gap == "statement":
+        totals.update(covered_lines=99_999, missing_lines=1)
+    elif gap == "branch":
+        totals.update(covered_branches=79, missing_branches=1)
+    elif gap == "excluded":
+        totals["excluded_lines"] = 1
+    if gap != "missing-report":
+        (tmp_path / "coverage.json").write_text(json.dumps({"totals": totals}), encoding="utf-8")
+    result = subprocess.run(
+        ["bash", "-c", script], cwd=tmp_path, capture_output=True, text=True, check=False,
+        env={**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"},
+    )
+    assert (result.returncode == 0) == (gap == "complete"), result.stdout + result.stderr
+    if gap != "missing-report":
+        assert f"Statements: {totals['covered_lines']}/{totals['num_statements']}" in result.stdout
+        assert f"Branches: {totals['covered_branches']}/{totals['num_branches']}" in result.stdout

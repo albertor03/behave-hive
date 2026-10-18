@@ -14,6 +14,37 @@ from behave_hive.discovery import Unit
 from behave_hive.runner import execute_batches, prepare_jobs
 
 
+def test_finished_process_is_not_signalled_during_interrupt(tmp_path):
+    jobs = prepare_jobs([Batch(1, Path("/proj/features"), (Unit(Path("/proj/features/a.feature"), 3),))],
+                        tmp_path, [], allure=False)
+    started, release = threading.Event(), threading.Event()
+    killed = []
+
+    class Finished:
+        pid = 4242
+
+        def wait(self):
+            assert release.wait(10)
+            return 0
+
+        def poll(self):
+            release.set()
+            return 0
+
+    def launch(*args, **kwargs):
+        started.set()
+        return Finished()
+
+    def interrupted(futures):
+        assert started.wait(10)
+        raise KeyboardInterrupt
+
+    result = execute_batches(jobs, 1, cwd=tmp_path, popen=launch, wait=interrupted,
+                             kill_group=lambda pid, sig: killed.append((pid, sig)), echo=lambda line: None)
+    assert result.interrupted
+    assert killed == []
+
+
 def test_sigint_before_a_pending_task_launches_prevents_the_launch_and_kills_running_processes(tmp_path):
     batches = [Batch(i, Path("/proj/features"), (Unit(Path("/proj/features/a.feature"), 10 + i),)) for i in (1, 2)]
     jobs = prepare_jobs(batches, tmp_path, [], allure=False)

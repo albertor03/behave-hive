@@ -81,6 +81,24 @@ def test_classification_examples_without_table_yields_nothing():
     assert classify_examples("Feature: F\n  Examples:\n", "en") == []
 
 
+@pytest.mark.parametrize("prefix", ["\n\n", "# project note\n", "\n# note\n\n"])
+def test_classification_leading_blanks_and_comments_do_not_hide_language_directive(prefix):
+    text = (I18N / "es_csv.feature").read_text(encoding="utf-8")
+    refs = classify_examples(prefix + text, "en")
+    assert refs == [ExamplesRef(kind="csv", line=7 + prefix.count("\n"), csv_path="data/users.csv")]
+
+
+@pytest.mark.parametrize("text", ["", "\n", "# only a comment\n\n"])
+def test_classification_without_content_has_no_examples(text, tmp_path):
+    assert classify_examples(text, "en") == []
+    assert expand_feature_text(text, tmp_path / "empty.feature", "en").text == text
+
+
+@pytest.mark.parametrize("body", ["not a table\n", "| unclosed table\n"])
+def test_classification_does_not_treat_non_table_examples_content_as_csv(body):
+    assert classify_examples(outline(body), "en") == []
+
+
 def test_classification_language_from_directive_es():
     text = (I18N / "es_csv.feature").read_text(encoding="utf-8")
     refs = classify_examples(text, "en")

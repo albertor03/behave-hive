@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import ItemsView
 from pathlib import Path
 from typing import TypeVar
 
@@ -51,6 +52,10 @@ class PathMap:
 
     def to_expanded(self, path: PathLike) -> PathLike:
         return self._translate(path, self._backward)
+
+    def items(self) -> ItemsView[str, str]:
+        """Read-only view of expanded-to-original prefix pairs."""
+        return self._forward.items()
 
     @staticmethod
     def _translate(path: PathLike, mapping: dict[str, str]) -> PathLike:

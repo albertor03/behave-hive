@@ -53,19 +53,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "expand":
             expand_tree(args.source, args.dest, "en")
             return 0
-        if args.command == "run":
-            cli = {
-                key: getattr(args, key)
-                for key in ("parallel", "workers", "scheme", "chunk", "results_dir", "formats")
-            }
-            cli["paths"] = args.paths or None
-            return run_suite(load_config(cli, args.config, behave_args), keep_tmp=args.keep_tmp)
+        cli = {
+            key: getattr(args, key)
+            for key in ("parallel", "workers", "scheme", "chunk", "results_dir", "formats")
+        }
+        cli["paths"] = args.paths or None
+        return run_suite(load_config(cli, args.config, behave_args), keep_tmp=args.keep_tmp)
     except KeyboardInterrupt:
         return 130
     except HiveError as exc:
         print(f"behave-hive: error: {exc}", file=sys.stderr)
         return exc.exit_code
-    return 0
 
 
 if __name__ == "__main__":
