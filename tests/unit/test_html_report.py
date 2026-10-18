@@ -2,7 +2,7 @@ import base64
 import hashlib
 import re
 
-from behave_hive.html_report import REPORT_MARKER, render
+from behave_hive.html_report import REPORT_MARKER, RunInfo, render
 from behave_hive.merge import Report
 from behave_hive.summary import summarize
 
@@ -21,8 +21,10 @@ def step(name="step", status="passed", duration=250_000_000, error=None, embeddi
     return data
 
 
-def scenario(name="S", status="passed", steps=None, source=None, line=3, tags=(), before=None, after=None):
-    ext = {"status": status, "behave_status": status}
+def scenario(
+    name="S", status="passed", steps=None, source=None, line=3, tags=(), before=None, after=None, slot=None
+):
+    ext = {"status": status, "behave_status": status, **(slot or {})}
     if source:
         ext["source"] = source
     element = {
@@ -287,3 +289,202 @@ def test_report_carries_the_generator_marker_in_the_head():
     head = page[: page.index("</head>")]
     assert f'<meta name="generator" content="{REPORT_MARKER}">' in head
     assert REPORT_MARKER == "behave-hive-report-4f9c2e7a"
+
+
+# --- run context ---------------------------------------------------------------------
+
+RUN = RunInfo(
+    started="2026-10-18 10:00:00", parallel=True, workers=2, scheme="scenario",
+    behave_hive="0.1.0", behave="1.3.3", python="3.14.0", command="behave-hive run --parallel -w 2",
+)
+
+
+def run_context(page):
+    section = re.search(r'<section class="run">(.*?)</section>', page, re.S).group(1)
+    pairs = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", section, re.S)
+    return {key: re.sub(r"<[^>]+>", "", value) for key, value in pairs}
+
+
+def html_with_run(run, features, duration=2.0):
+    report = Report(features)
+    return render(report, summarize(report), duration, run=run)
+
+
+def four_one_second_scenarios():
+    return [feature([scenario(f"S{i}", steps=[step(duration=1_000_000_000)], line=3 + i) for i in range(4)])]
+
+
+def test_run_info_shows_wall_time_scenario_time_and_speedup():
+    context = run_context(html_with_run(RUN, four_one_second_scenarios()))
+    assert context["Wall time"] == "2.00s"
+    assert context["Scenario time"] == "4.00s"
+    assert context["Speedup"] == "2.0x"
+
+
+def test_run_info_shows_the_run_context():
+    context = run_context(html_with_run(RUN, four_one_second_scenarios()))
+    assert context["Started"] == "2026-10-18 10:00:00"
+    assert context["Mode"] == "parallel, 2 workers, scheme scenario"
+    assert context["Versions"] == "behave-hive 0.1.0 · behave 1.3.3 · Python 3.14.0"
+    assert context["Command"] == "behave-hive run --parallel -w 2"
+
+
+def test_run_info_in_sequential_mode_has_no_speedup():
+    sequential = RunInfo(**{**RUN.__dict__, "parallel": False, "workers": 1})
+    context = run_context(html_with_run(sequential, four_one_second_scenarios(), duration=4.0))
+    assert context["Mode"] == "sequential"
+    assert "Speedup" not in context
+    assert context["Wall time"] == "4.00s" and context["Scenario time"] == "4.00s"
+
+
+def test_run_info_without_scenario_time_has_no_speedup():
+    assert "Speedup" not in run_context(html_with_run(RUN, [], duration=2.0))
+
+
+def test_run_info_texts_are_escaped():
+    hostile = RunInfo(**{**RUN.__dict__, "command": "<script>alert(1)</script>", "started": "<b>x</b>"})
+    page = html_with_run(hostile, [])
+    assert "<script>alert(1)</script>" not in page and "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+    assert "<b>x</b>" not in page
+
+
+def test_without_run_info_there_is_no_run_section():
+    assert 'class="run"' not in html([])
+
+
+# --- failures first --------------------------------------------------------------------
+
+
+def scenario_details(page):
+    return re.findall(r'<details class="scenario"[^>]*>', page)
+
+
+def names_in_order(page):
+    return re.findall(r'data-name="([^"]*)"', page)
+
+
+def mixed_feature():
+    return feature([
+        scenario("a passed", line=3),
+        scenario("b failed", "failed", [step(status="failed", error="boom")], line=5),
+        scenario("c undefined", "undefined", [step(status="undefined")], line=7),
+        scenario("d pending", "pending", [step(status="pending")], line=9),
+        scenario("e passed", line=11),
+        scenario("f failed", "failed", [step(status="failed", error="bang")], line=13),
+        scenario("g skipped", "skipped", [step(status="skipped")], line=15),
+    ])
+
+
+def test_failures_first_orders_by_severity_then_by_line():
+    order = names_in_order(html([mixed_feature()]))
+    assert order == ["b failed", "f failed", "c undefined", "d pending", "a passed", "e passed", "g skipped"]
+
+
+def test_failures_first_opens_everything_that_did_not_pass_or_skip():
+    page = html([mixed_feature()])
+    opened = {m for tag in scenario_details(page) for m in re.findall(r'data-name="([^"]*)"', tag) if " open" in tag}
+    assert opened == {"b failed", "f failed", "c undefined", "d pending"}
+
+
+def error_summary(page, name):
+    block = re.search(rf'<details class="scenario"[^>]*data-name="{name}".*?</summary>', page, re.S).group(0)
+    found = re.search(r'<span class="error-line">(.*?)</span>', block, re.S)
+    return found.group(1) if found else None
+
+
+def test_failures_first_shows_the_first_line_of_the_error_in_the_summary():
+    failing = scenario("boom", "failed", [step(), step(status="failed", error="AssertionError: nope\nmore\ndetail")])
+    page = html([feature([failing])])
+    assert error_summary(page, "boom") == "AssertionError: nope"
+
+
+def test_failures_first_summary_skips_a_generic_prefix_line():
+    failing = scenario("generic", "failed", [step(status="failed", error="ASSERT FAILED:\n\nExpected 3 got 4\n")])
+    assert error_summary(html([feature([failing])]), "generic") == "Expected 3 got 4"
+
+
+def test_failures_first_summary_uses_a_hook_error_when_no_step_failed():
+    hooked = scenario("hooked", "failed", [step()], after=hook("cleanup <broke>"))
+    assert error_summary(html([feature([hooked])]), "hooked") == "cleanup &lt;broke&gt;"
+
+
+def test_failures_first_summary_is_empty_without_an_error_and_for_passed_scenarios():
+    page = html([feature([scenario("fine"), scenario("silent", "failed", [step(status="failed")])])])
+    assert error_summary(page, "fine") is None
+    assert error_summary(page, "silent") is None
+
+
+def test_failures_first_copy_button_is_hidden_until_the_script_runs():
+    failing = scenario("boom", "failed", [step(status="failed", error="x")])
+    page = html([feature([failing])])
+    assert '<button type="button" class="copy" hidden>Copy error</button>' in page
+    assert page.count('class="copy"') == 1
+
+
+# --- worker and batch -------------------------------------------------------------------
+
+
+def test_batch_reference_shows_worker_batch_and_the_log_file():
+    page = html([feature([scenario("ran", slot={"worker": 1, "batch": 2})])])
+    body = re.search(r'<p class="slot">(.*?)</p>', page, re.S).group(1)
+    assert re.sub(r"<[^>]+>", "", body) == "worker 1 · batch 2 · logs/batch-2.log"
+
+
+def test_batch_reference_is_absent_without_worker_and_batch():
+    assert 'class="slot"' not in html([feature([scenario("ran"), scenario("half", slot={"worker": 1})])])
+
+
+# --- outline groups ------------------------------------------------------------------------
+
+
+def outline_row(n, status="passed", outline="Login", key="f;login-l5", line=None):
+    row = scenario(f"{outline} -- @1.{n} ", status, [step(status=status, error="no" if status == "failed" else None)],
+                   line=line or 8 + n)
+    row["id"] = f"{key};;{n}"
+    return row
+
+
+def test_outline_group_shows_the_outline_once_with_the_row_counts():
+    rows = [outline_row(1), outline_row(2, "failed"), outline_row(3)]
+    page = html([feature(rows)])
+    assert page.count('<details class="outline"') == 1
+    head = re.search(r'<details class="outline"[^>]*><summary>(.*?)</summary>', page, re.S).group(1)
+    assert re.sub(r"<[^>]+>", "", head).split() == ["Login", "3", "rows", "·", "1", "failed"]
+    assert page.count('<details class="scenario"') == 3
+    assert page.index('<details class="outline"') < page.index('<details class="scenario"')
+
+
+def test_outline_group_with_only_passed_rows_says_so():
+    page = html([feature([outline_row(1), outline_row(2)])])
+    head = re.search(r'<details class="outline"[^>]*><summary>(.*?)</summary>', page, re.S).group(1)
+    assert "2 rows · all passed" in re.sub(r"<[^>]+>", "", head)
+
+
+def test_outline_group_is_open_only_when_a_row_did_not_pass():
+    bad = html([feature([outline_row(1, "failed")])])
+    good = html([feature([outline_row(1)])])
+    assert re.search(r'<details class="outline"[^>]* open>', bad)
+    assert not re.search(r'<details class="outline"[^>]* open>', good)
+
+
+def test_outline_group_rows_and_groups_follow_failures_first():
+    rows = [
+        outline_row(1, outline="Slow", key="f;slow-l5"),
+        outline_row(2, "failed", outline="Slow", key="f;slow-l5"),
+        outline_row(1, outline="Fast", key="f;fast-l20", line=21),
+    ]
+    order = names_in_order(html([feature([*rows, scenario("plain", line=30)])]))
+    assert order == ["slow -- @1.2 ", "slow -- @1.1 ", "fast -- @1.1 ", "plain"]
+
+
+def test_outline_group_name_is_escaped_and_plain_scenarios_stay_ungrouped():
+    page = html([feature([outline_row(1, outline="<b>x</b>"), scenario("solo", line=30)])])
+    assert "<b>x</b>" not in page and "&lt;b&gt;x&lt;/b&gt;" in page
+    assert page.count('<details class="outline"') == 1 and page.count('<details class="scenario"') == 2
+
+
+def test_failures_first_whitespace_only_error_has_the_button_but_no_headline():
+    blank = scenario("blank", "failed", [step(status="failed", error=" \n  ")])
+    page = html([feature([blank])])
+    assert error_summary(page, "blank") is None
+    assert 'class="copy"' in page

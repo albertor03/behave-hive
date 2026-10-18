@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from contextlib import suppress
 from pathlib import Path
+from uuid import uuid4
 
 from behave_hive.errors import HiveError
 
@@ -18,8 +19,9 @@ try:
         scenario_status_details,
     )
     from allure_commons.logger import AllureFileLogger
+    from allure_commons.model2 import ATTACHMENT_PATTERN, Attachment, StatusDetails
     from allure_commons.model2 import Status as AllureStatus
-    from allure_commons.model2 import StatusDetails
+    from allure_commons.types import AttachmentType
     from allure_commons.utils import get_testplan, now
     from behave.formatter.base import Formatter
 except ImportError as exc:
@@ -30,6 +32,7 @@ from behave_hive.roots import PathMap
 from behave_hive.selection import SelectionSnapshot
 
 PATH_MAP_KEY = "behave_hive.path_map"
+EXTENSIONS = {kind.mime_type: kind.extension for kind in AttachmentType}
 
 
 class HiveAllureFileLogger(AllureFileLogger):
@@ -64,6 +67,15 @@ class HiveAllureListener(AllureListener):
         for key in ("steps", "befores", "afters"):
             for child in getattr(result, key, []):
                 self.scrub_result(child)
+
+    def attach_embedding(self, mime_type, data):
+        """Attach `data` to the latest step of the current scenario, even when that step already ended."""
+        test = self.logger.get_test(self.current_scenario_uuid)
+        if test is None or not test.steps:
+            return
+        file_name = ATTACHMENT_PATTERN.format(prefix=uuid4(), ext=EXTENSIONS.get(mime_type, "attach"))
+        test.steps[-1].attachments.append(Attachment(source=file_name, name=mime_type, type=mime_type))
+        allure_commons.plugin_manager.hook.report_attached_data(body=data, file_name=file_name)
 
     def start_scenario(self, scenario):
         super().start_scenario(scenario)
@@ -134,3 +146,6 @@ class AllureFormatter(BaseAllureFormatter):
     def result(self, result):
         if self._on:
             super().result(result)
+
+    def embedding(self, mime_type, data):
+        self.listener.attach_embedding(mime_type, data)

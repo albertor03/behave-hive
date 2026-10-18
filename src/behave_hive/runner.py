@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import datetime
+import importlib.metadata
 import json
 import os
+import platform
 import shutil
 import time
 from contextlib import suppress
@@ -18,9 +21,10 @@ from behave_hive.discovery import discover_units
 from behave_hive.errors import ConfigError, HiveError
 from behave_hive.execution import Job, execute_batches
 from behave_hive.expand import classify_examples, expand_tree
-from behave_hive.html_report import REPORT_MARKER, render
+from behave_hive.html_report import REPORT_MARKER, RunInfo, render
 from behave_hive.lock import results_lock
 from behave_hive.merge import merge, to_cucumber
+from behave_hive.privacy import scrub, user_home
 from behave_hive.roots import PathMap, feature_files, group_by_root, needs_expansion
 from behave_hive.summary import exit_code, format_summary, summarize
 
@@ -46,6 +50,7 @@ def build_plan(
     behave_args: list[str],
     allure: bool,
     path_map: dict[Path, Path] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> Path:
     """Write the locations file and the JSON plan of `batch`; return the plan path."""
     tmp = Path(results_dir).resolve() / "tmp"
@@ -64,6 +69,7 @@ def build_plan(
         "cucumber_out": str(tmp / f"batch-{batch.index}.json"),
         "allure_dir": str(tmp / f"allure-batch-{batch.index}") if allure else None,
         "path_map": {str(expanded): str(original) for expanded, original in (path_map or {}).items()},
+        "environment": environment or {},
     }
     plan_path = tmp / f"batch-{batch.index}.plan.json"
     _write_private(plan_path, json.dumps(plan, indent=2))
@@ -76,12 +82,13 @@ def prepare_jobs(
     behave_args: list[str],
     allure: bool,
     path_map: dict[Path, Path] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> list[Job]:
     results = Path(results_dir).resolve()
     (results / "logs").mkdir(parents=True, exist_ok=True)
     jobs = []
     for batch in batches:
-        plan_path = build_plan(batch, results, behave_args, allure, path_map)
+        plan_path = build_plan(batch, results, behave_args, allure, path_map, environment)
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         jobs.append(
             Job(
@@ -163,9 +170,10 @@ def write_text_atomically(path: Path, text: str) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False) -> int:
+def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False, argv: list[str] | None = None) -> int:
     """Run the suite described by `cfg`; return the exit code (spec:parallel-runner)."""
     started = time.monotonic()
+    started_at = datetime.datetime.now()
     inputs = []
     for name in cfg.paths:
         path = Path(name)
@@ -186,10 +194,22 @@ def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False) -> int:
         clean_managed(results_dir)
         run_dir = cfg.work_dir.resolve() / f"run-{os.getpid()}-{int(time.time() * 1000)}"
         try:
-            return _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started)
+            return _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, (started, started_at), argv or [])
         finally:
             if not keep_tmp:
                 remove_tmp(results_dir, run_dir)
+
+
+def _environment(cfg: HiveConfig, workers: int) -> dict[str, str]:
+    """The run context written to Allure's `environment.properties`."""
+    return {
+        "behave-hive": importlib.metadata.version("behave-hive"),
+        "behave": importlib.metadata.version("behave"),
+        "python": platform.python_version(),
+        "mode": "parallel" if cfg.parallel else "sequential",
+        "workers": str(workers),
+        "scheme": cfg.scheme,
+    }
 
 
 def _prepare_roots(cfg, roots, lang, run_dir):
@@ -212,15 +232,33 @@ def _prepare_roots(cfg, roots, lang, run_dir):
     return path_map, sources, units_by_root
 
 
-def _write_html(cfg, report, summary, duration) -> None:
+def _run_info(environment: dict[str, str], started_at: datetime.datetime, argv: list[str]) -> RunInfo:
+    """What the HTML page says about the run; the command never shows the user's home or project path."""
+    command = " ".join(["behave-hive", *argv])
+    return RunInfo(
+        started=started_at.strftime("%Y-%m-%d %H:%M:%S"),
+        parallel=environment["mode"] == "parallel",
+        workers=int(environment["workers"]),
+        scheme=environment["scheme"],
+        behave_hive=environment["behave-hive"],
+        behave=environment["behave"],
+        python=environment["python"],
+        command=scrub(command, PathMap({}), Path.cwd(), user_home()),
+    )
+
+
+def _write_html(cfg, report, summary, duration, run) -> None:
     try:
         cfg.report_path.parent.mkdir(parents=True, exist_ok=True)
-        write_text_atomically(cfg.report_path, render(report, summary, duration, report_name=cfg.report_name))
+        write_text_atomically(
+            cfg.report_path, render(report, summary, duration, report_name=cfg.report_name, run=run)
+        )
     except OSError as exc:
         raise HiveError(f"cannot write HTML report to {cfg.report_path}: {exc}") from None
 
 
-def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> int:
+def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, clock, argv) -> int:
+    started, started_at = clock
     if "html" in cfg.formats:
         remove_stale_report(cfg.report_path)
     for line in _examples_report([p for group in roots.values() for p in group], lang):
@@ -237,10 +275,13 @@ def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> in
         print("No scenarios found")
         return 0
 
+    workers = effective_workers(cfg.workers, cfg.parallel)
+    environment = _environment(cfg, workers)
     jobs = prepare_jobs(
-        batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats, path_map=path_map
+        batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats, path_map=path_map,
+        environment=environment,
     )
-    execution = execute_batches(jobs, effective_workers(cfg.workers, cfg.parallel))
+    execution = execute_batches(jobs, workers)
 
     report = merge(execution.partials, PathMap(path_map), sources)
     if "cucumber" in cfg.formats:
@@ -248,7 +289,7 @@ def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> in
     summary = summarize(report)
     duration = time.monotonic() - started
     if "html" in cfg.formats:
-        _write_html(cfg, report, summary, duration)
+        _write_html(cfg, report, summary, duration, _run_info(environment, started_at, argv))
 
     print(format_summary(summary, duration))
     for outcome in execution.batch_errors:

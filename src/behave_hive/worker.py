@@ -18,6 +18,13 @@ ALLURE = "behave_hive.formatters.allure:AllureFormatter"
 PATH_MAP_KEY = "behave_hive.path_map"
 
 
+def _write_environment(allure_dir: Path, environment: dict[str, str]) -> None:
+    if environment:
+        allure_dir.mkdir(parents=True, exist_ok=True)
+        lines = (f"{key}={value}\n" for key, value in environment.items())
+        (allure_dir / "environment.properties").write_text("".join(lines), encoding="utf-8")
+
+
 def run_plan(plan: dict) -> int:
     from behave.__main__ import run_behave
 
@@ -33,6 +40,7 @@ def run_plan(plan: dict) -> int:
     if plan.get("allure_dir"):
         formats.append(ALLURE)
         outputs.append(StreamOpener(plan["allure_dir"]))
+        _write_environment(Path(plan["allure_dir"]), plan.get("environment", {}))
     formats.append("plain")
     outputs.append(StreamOpener(stream=sys.stdout))
     config.format = formats

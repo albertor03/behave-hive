@@ -19,6 +19,12 @@ from behave_hive.selection import SelectionSnapshot
 from behave_hive.status import map_status, scenario_status
 
 
+def _run_slot() -> dict[str, int]:
+    """`worker` and `batch` from the environment set by the runner; empty when not a number."""
+    slot = {"worker": os.environ.get("BEHAVE_HIVE_WORKER", ""), "batch": os.environ.get("BEHAVE_HIVE_BATCH", "")}
+    return {key: int(value) for key, value in slot.items() if value.isdigit()}
+
+
 def slug(text: str, default: str = "scenario") -> str:
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or default
@@ -179,7 +185,7 @@ class CucumberJSONFormatter(Formatter):
             "type": "scenario",
             "tags": self._tags(feature, rule, scenario, outline),
             "steps": [self._step(s) for s in own_steps],
-            "x-behave-hive": {"status": status, "behave_status": scenario.status.name},
+            "x-behave-hive": {"status": status, "behave_status": scenario.status.name, **_run_slot()},
         }
         self._hook_elements(element, scenario, steps)
         return element

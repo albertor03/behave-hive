@@ -44,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    own, behave_args = split_argv(list(sys.argv[1:] if argv is None else argv))
+    argv = list(sys.argv[1:] if argv is None else argv)
+    own, behave_args = split_argv(argv)
     try:
         args = build_parser().parse_args(own)
     except SystemExit as exc:  # --version, --help and usage errors
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             for key in ("parallel", "workers", "scheme", "chunk", "results_dir", "formats")
         }
         cli["paths"] = args.paths or None
-        return run_suite(load_config(cli, args.config, behave_args), keep_tmp=args.keep_tmp)
+        return run_suite(load_config(cli, args.config, behave_args), keep_tmp=args.keep_tmp, argv=argv)
     except KeyboardInterrupt:
         return 130
     except HiveError as exc:

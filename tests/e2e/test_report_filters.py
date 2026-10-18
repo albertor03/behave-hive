@@ -1,5 +1,6 @@
 """Opens a rendered report in headless Chromium and exercises the toolbar (task 5.12)."""
 import base64
+import contextlib
 
 import pytest
 
@@ -34,26 +35,21 @@ def scenario(name, status, tags=(), steps=None, line=3):
     }
 
 
-@pytest.fixture
-def page(tmp_path):
-    features = [
-        {
-            "uri": "features/a.feature", "id": "a", "keyword": "Feature", "name": "Login", "description": "", "line": 1,
-            "tags": [],
-            "elements": [
-                scenario("admin ok", "passed", ("@smoke",), line=3),
-                scenario(
-                    "admin bad", "failed", ("@smoke", "@web"),
-                    [step("failed", "boom", [{"mime_type": "image/png", "data": PNG}])], line=5,
-                ),
-                scenario("guest ok", "passed", ("@web",), line=7),
-            ],
-        },
-        {
-            "uri": "features/b.feature", "id": "b", "keyword": "Feature", "name": "Other", "description": "", "line": 1,
-            "tags": [], "elements": [scenario("other ok", "passed", (), line=3)],
-        },
-    ]
+def feature(name, uri, elements):
+    return {
+        "uri": uri, "id": uri, "keyword": "Feature", "name": name, "description": "", "line": 1, "tags": [],
+        "elements": elements,
+    }
+
+
+def outline_row(n, status):
+    row = scenario(f"Login -- @1.{n} ", status, ("@smoke",), line=10 + n)
+    row["id"] = f"c;login-l9;;{n}"
+    return row
+
+
+@contextlib.contextmanager
+def opened(tmp_path, features, fragment=""):
     report = Report(features)
     path = tmp_path / "report.html"
     path.write_text(render(report, summarize(report), 3.2), encoding="utf-8")
@@ -61,16 +57,37 @@ def page(tmp_path):
     policy_errors = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        context = browser.new_context(viewport={"width": 1200, "height": 900})
+        context = browser.new_context(
+            viewport={"width": 1200, "height": 900}, permissions=["clipboard-read", "clipboard-write"]
+        )
         tab = context.new_page()
         tab.on("request", lambda r: requests.append(r.url))
         tab.on("console", lambda msg: policy_errors.append(msg.text) if "Content Security Policy" in msg.text else None)
-        tab.goto(path.as_uri())
+        tab.goto(path.as_uri() + fragment)
         tab.requests = requests
         tab.policy_errors = policy_errors
         tab.screenshot_path = tmp_path / "report.png"
         yield tab
         browser.close()
+
+
+LOGIN_FEATURES = [
+    feature("Login", "features/a.feature", [
+        scenario("admin ok", "passed", ("@smoke",), line=3),
+        scenario(
+            "admin bad", "failed", ("@smoke", "@web"),
+            [step("failed", "boom", [{"mime_type": "image/png", "data": PNG}])], line=5,
+        ),
+        scenario("guest ok", "passed", ("@web",), line=7),
+    ]),
+    feature("Other", "features/b.feature", [scenario("other ok", "passed", (), line=3)]),
+]
+
+
+@pytest.fixture
+def page(tmp_path):
+    with opened(tmp_path, LOGIN_FEATURES) as tab:
+        yield tab
 
 
 def visible(page):
@@ -133,3 +150,67 @@ def test_csp_allows_report_controls_and_images_without_policy_violations(page):
     page.click("#expand-all")
     assert page.locator("label.zoom img").evaluate("img => img.complete && img.naturalWidth > 0")
     assert page.policy_errors == []
+
+
+def test_the_failed_scenario_is_listed_first_and_open_with_its_headline(page):
+    assert page.locator("details.scenario[open]").count() == 1
+    first = page.locator("details.scenario").first
+    assert first.get_attribute("data-name") == "admin bad"
+    assert first.locator(".error-line").inner_text() == "boom"
+
+
+def test_copy_button_puts_the_full_error_in_the_clipboard(page):
+    button = page.locator("details.scenario button.copy")
+    assert button.is_visible()
+    button.click()
+    assert page.evaluate("navigator.clipboard.readText()") == "boom"
+    assert page.locator("details.scenario").first.get_attribute("open") is not None
+
+
+def test_status_filter_works_inside_an_outline_group(tmp_path):
+    rows = [outline_row(1, "passed"), outline_row(2, "failed"), outline_row(3, "passed")]
+    with opened(tmp_path, [feature("Login", "features/c.feature", rows)]) as tab:
+        assert tab.locator("details.outline").count() == 1
+        assert "3 rows · 1 failed" in tab.locator("details.outline > summary").inner_text()
+        tab.select_option("#status-filter", "passed")
+        assert visible(tab) == 2
+        assert tab.locator("details.outline:not([hidden])").count() == 1
+        tab.fill("#search", "no such scenario")
+        assert visible(tab) == 0
+        assert tab.locator("details.outline:not([hidden])").count() == 0
+        assert tab.locator("section.feature:not([hidden])").count() == 0
+
+
+def test_the_fragment_selects_the_filters_on_load(tmp_path):
+    with opened(tmp_path, LOGIN_FEATURES, "#status=failed&tag=@smoke") as tab:
+        assert visible(tab) == 1
+        assert tab.locator("details.scenario:not([hidden])").get_attribute("data-name") == "admin bad"
+        assert tab.locator("#status-filter").input_value() == "failed"
+        assert tab.locator("#tag-filter").input_value() == "@smoke"
+
+
+def test_changing_a_filter_updates_the_fragment_and_reset_clears_it(page):
+    page.select_option("#status-filter", "passed")
+    page.fill("#search", "guest")
+    assert page.evaluate("location.hash") == "#search=guest&status=passed"
+    page.click("#reset")
+    assert page.evaluate("location.hash") == ""
+
+
+def test_the_fragment_with_a_search_text_is_restored(tmp_path):
+    with opened(tmp_path, LOGIN_FEATURES, "#search=other%20ok") as tab:
+        assert tab.locator("#search").input_value() == "other ok"
+        assert visible(tab) == 1
+
+
+def test_unknown_fragment_values_are_ignored(tmp_path):
+    with opened(tmp_path, LOGIN_FEATURES, "#status=nonsense&tag=@nope&other=1") as tab:
+        assert visible(tab) == 4
+        assert tab.locator("#status-filter").input_value() == ""
+
+
+def test_a_malformed_fragment_does_not_break_the_controls(tmp_path):
+    with opened(tmp_path, LOGIN_FEATURES, "#search=%E0%A4%A&status=failed") as tab:
+        assert tab.locator(".toolbar").is_visible()
+        assert tab.locator("#search").input_value() == ""
+        assert visible(tab) == 1
