@@ -84,6 +84,7 @@ A change is done when all of these hold, and you report the real output, not a s
 - **Running behave in tests:** always in a subprocess (`project.run("behave", ...)` from the `make_project` fixture), never in-process, because behave keeps global state.
 - **Dependencies:** none beyond those declared in `pyproject.toml`. Quality tools (ruff, pylint, pytest-cov, coverage and pip-audit) belong in the `dev` extra. `allure-behave` stays pinned to `2.16.2`, because `formatters/allure.py` relies on its internal API.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/), English, imperative mood, for example `feat: add CSV examples scanner` or `fix(merge): keep background before its scenario`.
+- **README links:** the README is also the PyPI project page, where relative links and images break. Use absolute URLs (`https://raw.githubusercontent.com/albertor03/behave-hive/main/...` for images, `https://github.com/albertor03/behave-hive/blob/main/...` for files); a unit test enforces it. A published version's page cannot be fixed, only the next release.
 - **Examples:** a new capability gets an example under `example/features/` and a row in `example/README.md`; update the scenario count in `tests/e2e/test_example.py`.
 - **New modules** go in `src/behave_hive/` with one concern each and their own unit tests; they count toward the 100% gate from the first commit.
 
