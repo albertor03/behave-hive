@@ -199,7 +199,7 @@ behave-hive run --parallel --scheme feature -w 2     # one process per feature, 
 
 The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `chunk`); [`example/configs/`](https://github.com/albertor03/behave-hive/tree/main/example/configs/) has a ready-made file for each case. A scenario's own steps never run in parallel. `chunk` sets how many units each process receives (`0` shares them evenly). `before_all` and `after_all` in `environment.py` run once per process, so use [`BEHAVE_HIVE_WORKER`](#worker-identification) to keep ports or users apart.
 
-Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or CSV error, `130` interrupted with Ctrl+C. When nothing matches, `No scenarios found` is printed and the exit code is 0.
+Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or data file (CSV or JSON) error, `130` interrupted with Ctrl+C (or Ctrl+Break on Windows). When nothing matches, `No scenarios found` is printed and the exit code is 0.
 
 ## Configuration
 
@@ -228,7 +228,7 @@ report_path = reports/report.html
 | `report_name` | project name | HTML title and heading only; blank also uses the fallback. |
 | `report_path` | `<project-root>/report.html` | Full HTML filename; relative to the project root, or absolute. Parents are created. |
 | `formats` | `cucumber, html` | Comma or space separated; TOML arrays work too. |
-| `work_dir` | `.behave-hive` | Deprecated and ignored: runs no longer need a working directory. Accepted so existing configuration keeps working. |
+| `work_dir` | (none) | Deprecated and ignored: runs no longer need a working directory. Accepted so existing configuration keeps working, with a warning. |
 | `behave_args` | empty | Shell-style string (`--tags="@a and not @b" -D env=qa`) or a TOML array. `%` is literal. |
 | `paths` | `features` | What to run when no path is given. |
 
@@ -358,7 +358,7 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
 - **Lines in expanded features:** rows generated from a CSV or JSON file, and everything after them in the file, report the lines of the expanded file. The `uri` is the original one and the HTML shows `csv:row` or `json:N`; files without data tables keep their lines.
 - **Unbalanced batches:** units are split into consecutive chunks. Use `chunk = 1` for dynamic balancing, at the cost of one process per unit.
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
-- **Windows:** supported, tested in CI on Python 3.11 to 3.14. Ctrl+C asks each batch to stop with Ctrl+Break and, after a grace period, ends its whole process tree so browsers started by a step do not survive. Owner-only permissions on the run files (`0600`/`0700`) apply to macOS and Linux; on Windows they keep the default permissions of the results directory.
+- **Windows:** supported, tested in CI on Python 3.11 to 3.14. Ctrl+C (or Ctrl+Break) stops the run: it asks each batch to stop with Ctrl+Break and, after a grace period, ends its whole process tree so browsers started by a step do not survive. Owner-only permissions on the run files (`0600`/`0700`) apply to macOS and Linux; on Windows they keep the default permissions of the results directory.
 - **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV and JSON.
 - **Data file access is not sandboxed:** a feature may reference any CSV or JSON file readable by the
   current user, including paths with `..`; its rows can appear in reports.

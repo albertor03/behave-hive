@@ -1,4 +1,5 @@
 import json
+import os
 import platform
 import re
 import subprocess
@@ -324,11 +325,10 @@ def test_reports_keep_tmp_keeps_the_partials_and_locations(project):
     assert list(tmp.glob("batch-*.json")) and list(tmp.glob("batch-*.locations"))
 
 
-def test_reports_without_keep_tmp_removes_tmp_and_the_run_directory(project):
+def test_reports_without_keep_tmp_removes_tmp(project):
     csv_project(project)
     assert hive(project, "run", "--parallel", "-w", "2").returncode == 0
     assert not (project.root / "reports" / "tmp").exists()
-    assert not list(project.root.glob(".behave-hive/run-*"))
 
 
 # --- 6.9 exit codes ---------------------------------------------------------------
@@ -595,3 +595,34 @@ def test_html_report_command_does_not_leak_the_home_directory(project, monkeypat
     page = (project.root / "report.html").read_text(encoding="utf-8")
     assert str(project.root) not in page
     assert "--results-dir out" in page
+
+
+def test_run_in_a_non_ascii_directory_with_a_non_utf8_locale(make_project):
+    """Windows opens text files with its ANSI code page; the Latin-1 locale reproduces that elsewhere."""
+    env = {**os.environ, "PYTHONUTF8": "0", "LC_ALL": "en_US.ISO8859-1", "LANG": "en_US.ISO8859-1"}
+    code = "import locale, sys; print(locale.getpreferredencoding(False), sys.getfilesystemencoding())"
+    probe = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.split()
+    if probe[0].lower().replace("-", "") == "utf8" or probe[1].lower().replace("-", "") != "utf8":
+        pytest.skip(f"no locale whose text encoding differs from the UTF-8 file names here: {probe}")
+    project = make_project("Jos\u00e9")
+    csv_project(project, rows=("ok", "ok"))
+    result = subprocess.run(
+        [sys.executable, "-m", "behave_hive.cli", "run", "--parallel", "-w", "2"],
+        cwd=project.root, capture_output=True, env=env, timeout=120, check=False,
+    )
+    output = (result.stdout + result.stderr).decode("utf-8", "replace")
+    assert result.returncode == 0, output
+    assert "2 passed" in output
+
+
+def test_run_warns_that_work_dir_is_deprecated_only_when_it_is_configured(project):
+    csv_project(project, rows=("ok",))
+    assert "work_dir" not in hive(project, "run").stderr
+    project.write("behave.ini", "[behave_hive]\nwork_dir = .hive\n")
+    result = hive(project, "run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "behave-hive: warning: work_dir is deprecated and ignored" in result.stderr
+    assert not (project.root / ".hive").exists()

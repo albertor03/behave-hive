@@ -153,7 +153,8 @@ def _outline_group(rows: list[tuple[dict | None, dict]]) -> str:
     opened = " open" if any(st in SEVERITY for st in statuses) else ""
     return (
         f'<details class="outline"{opened}><summary><span>{escape(name)}</span> '
-        f'<span class="muted">{len(rows)} rows · {problems or "all passed"}</span></summary>'
+        f'<span class="muted"><span class="count" data-total="{len(rows)}">{len(rows)} rows</span>'
+        f' · {problems or "all passed"}</span></summary>'
         + "".join(_scenario(b, s) for b, s in rows)
         + "</details>"
     )

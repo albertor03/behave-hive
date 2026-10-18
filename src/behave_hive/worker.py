@@ -28,7 +28,9 @@ def _write_environment(allure_dir: Path, environment: dict[str, str]) -> None:
 def run_plan(plan: dict) -> int:
     from behave.__main__ import run_behave
 
-    args = ["@" + plan["locations_file"], *plan["behave_args"]]
+    # behave would read an "@file" with the locale encoding, which breaks non-ASCII paths on Windows
+    text = Path(plan["locations_file"]).read_text(encoding="utf-8")
+    args = [*(line for line in text.splitlines() if line.strip()), *plan["behave_args"]]
     try:
         config = build_behave_config(args)
     except (BehaveConfigError, TagExpressionError) as exc:

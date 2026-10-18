@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 from importlib.metadata import version
 from pathlib import Path
@@ -45,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if hasattr(signal, "SIGBREAK"):
+        # Windows: Ctrl+Break stops a run like Ctrl+C instead of killing it without cleanup
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
     own, behave_args = split_argv(argv)
     try:
         args = build_parser().parse_args(own)

@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -172,6 +173,12 @@ def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False, argv: list[str] | None
     """Run the suite described by `cfg`; return the exit code (spec:parallel-runner)."""
     started = time.monotonic()
     started_at = datetime.datetime.now()
+    if cfg.work_dir is not None:
+        print(
+            "behave-hive: warning: work_dir is deprecated and ignored (runs no longer need a working "
+            "directory); remove it from the configuration",
+            file=sys.stderr,
+        )
     inputs = []
     for name in cfg.paths:
         path = Path(name)
