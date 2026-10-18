@@ -187,8 +187,8 @@ jobs:
         run: |
           set -o pipefail
           python -m coverage combine .artifacts/data/*/.coverage
-          python -m coverage json
-          python -m coverage xml
+          python -m coverage json --fail-under=0
+          python -m coverage xml --fail-under=0
           python -m coverage report --fail-under=0 | tee .artifacts/coverage.txt
       - name: Check exact coverage counters
         if: always()

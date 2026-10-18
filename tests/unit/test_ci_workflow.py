@@ -92,7 +92,7 @@ def test_exact_coverage_evidence_combines_both_platforms_checks_and_is_always_re
     assert 'python-version: "3.14"' in body
     assert "pattern: coverage-data-*" in body
     assert "python -m coverage combine .artifacts/data/*/.coverage" in body
-    for report in ("coverage json", "coverage xml", "| tee .artifacts/coverage.txt"):
+    for report in ("coverage json --fail-under=0", "coverage xml --fail-under=0", "| tee .artifacts/coverage.txt"):
         assert report in body
     check = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
     assert check and "if: always()" in check.group(1)

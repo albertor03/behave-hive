@@ -86,3 +86,10 @@ def test_lock_file_that_cannot_be_opened_is_a_hive_error(tmp_path):
 
     with pytest.raises(HiveError, match="cannot open the results lock"), results_lock(results):
         pass
+
+
+def test_lock_works_where_the_os_has_no_fchmod(tmp_path, monkeypatch):
+    """Python before 3.13 has no os.fchmod on Windows."""
+    monkeypatch.delattr(os, "fchmod")
+    with results_lock(tmp_path), pytest.raises(HiveError, match="in use by another run"), results_lock(tmp_path):
+        pass
