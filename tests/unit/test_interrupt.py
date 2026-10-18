@@ -11,7 +11,7 @@ import pytest
 
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
-from behave_hive.execution import execute_batches
+from behave_hive.execution import NEW_GROUP, _kill_group, execute_batches
 from behave_hive.runner import prepare_jobs
 
 
@@ -41,7 +41,7 @@ def test_finished_process_is_not_signalled_during_interrupt(tmp_path):
         raise KeyboardInterrupt
 
     result = execute_batches(jobs, 1, cwd=tmp_path, popen=launch, wait=interrupted,
-                             kill_group=lambda pid, sig: killed.append((pid, sig)), echo=lambda line: None)
+                             kill_group=lambda pid, force: killed.append((pid, force)), echo=lambda line: None)
     assert result.interrupted
     assert killed == []
 
@@ -55,7 +55,7 @@ def test_sigint_before_a_pending_task_launches_prevents_the_launch_and_kills_run
     release = threading.Event()
     killed = threading.Event()
     popen_calls: list[int] = []
-    kills: list[tuple[int, int]] = []
+    kills: list[tuple[int, bool]] = []
     arrivals = iter(range(1, 100))
     arrivals_lock = threading.Lock()
 
@@ -86,8 +86,8 @@ def test_sigint_before_a_pending_task_launches_prevents_the_launch_and_kills_run
         assert started.wait(10) and at_barrier.wait(10)
         raise KeyboardInterrupt
 
-    def fake_kill(pid, sig):
-        kills.append((pid, sig))
+    def fake_kill(pid, force):
+        kills.append((pid, force))
         release.set()  # the pending task proceeds only after cancel was set
         killed.set()
 
@@ -98,12 +98,12 @@ def test_sigint_before_a_pending_task_launches_prevents_the_launch_and_kills_run
 
     assert result.interrupted is True
     assert popen_calls == [1], "the pending task must not call popen after the interrupt"
-    assert kills == [(4242, signal.SIGTERM)]
+    assert kills == [(4242, False)]
     assert result.partials == []
     assert result.batch_errors == []
 
 
-def test_sigint_escalates_to_sigkill_when_a_process_ignores_sigterm(tmp_path):
+def test_interrupt_forces_the_kill_when_a_process_ignores_the_request(tmp_path):
     batches = [Batch(1, Path("/proj/features"), (Unit(Path("/proj/features/a.feature"), 10),))]
     jobs = prepare_jobs(batches, tmp_path, [], allure=False)
     started = threading.Event()
@@ -124,9 +124,9 @@ def test_sigint_escalates_to_sigkill_when_a_process_ignores_sigterm(tmp_path):
         assert started.wait(10)
         raise KeyboardInterrupt
 
-    def fake_kill(pid, sig):
-        kills.append(sig)
-        if sig == signal.SIGKILL:
+    def fake_kill(pid, force):
+        kills.append(force)
+        if force:
             dead.set()
 
     def fake_popen(command, **kwargs):
@@ -135,7 +135,7 @@ def test_sigint_escalates_to_sigkill_when_a_process_ignores_sigterm(tmp_path):
 
     execute_batches(jobs, 1, cwd=tmp_path, popen=fake_popen, echo=lambda line: None,
                     wait=fake_wait, kill_group=fake_kill, grace=0.2)
-    assert kills == [signal.SIGTERM, signal.SIGKILL]
+    assert kills == [False, True]
 
 
 SLOW_STEPS = '''
@@ -202,3 +202,33 @@ def test_sigint_integration_stops_everything_and_reports_only_complete_batches(m
     data = json.loads(cucumber.read_text()) if cucumber.exists() else []
     assert [e for f in data for e in f["elements"]] == []
     assert not list((reports / "allure-results").glob("*-result.json"))
+
+
+SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="process groups of Windows")
+@pytest.mark.parametrize("force", [False, True])
+def test_windows_kill_group_reaches_a_process_in_its_own_group(force):
+    proc = subprocess.Popen(SLEEP, **NEW_GROUP)
+    try:
+        _kill_group(proc.pid, force)
+        if not force:
+            # Ctrl+Break needs a console, which CI may not give the runner: end it the hard way then
+            _kill_group(proc.pid, True)
+        assert proc.wait(timeout=30) is not None
+    finally:
+        proc.kill()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="process groups of POSIX")
+@pytest.mark.parametrize("force", [False, True])
+def test_posix_kill_group_ends_the_group_and_tolerates_a_finished_process(force):
+    proc = subprocess.Popen(SLEEP, **NEW_GROUP)
+    pgid = os.getpgid(proc.pid)
+    _kill_group(proc.pid, force)
+    assert proc.wait(timeout=30) == (-signal.SIGKILL if force else -signal.SIGTERM)
+    with pytest.raises(ProcessLookupError):
+        os.getpgid(proc.pid)
+    assert pgid == proc.pid
+    _kill_group(proc.pid, force)

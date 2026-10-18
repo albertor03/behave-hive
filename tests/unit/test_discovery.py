@@ -4,7 +4,6 @@ import pytest
 
 from behave_hive.discovery import Unit, discover_units
 from behave_hive.errors import ConfigError
-from behave_hive.expand import expand_feature_text
 
 I18N = Path(__file__).parent.parent / "fixtures" / "i18n"
 
@@ -82,12 +81,12 @@ def test_units_overlapping_inputs_are_deduplicated(project):
     assert len(set(units)) == 7
 
 
-def test_units_csv_rows_expanded_become_units(project):
+def test_units_csv_rows_become_units_without_a_copy_of_the_feature(project):
     project.write("features/data/v.csv", "v\n1\n2\n3\n4\n5\n")
     text = "Feature: F\n  Scenario Outline: O\n    Given value \"<v>\"\n    Examples:\n      | read('data/v.csv') |\n"
     feature = project.write("features/a.feature", text).resolve()
-    feature.write_text(expand_feature_text(text, feature, "en").text, encoding="utf-8")
     assert len(discover([feature])) == 5
+    assert feature.read_text(encoding="utf-8") == text
 
 
 def test_units_reject_incompatible_behave_configuration(project):

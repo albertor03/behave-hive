@@ -6,6 +6,8 @@ import pytest
 from behave_hive.errors import HiveError
 from behave_hive.lock import LOCK_NAME, results_lock
 
+posix_only = pytest.mark.skipif(os.name == "nt", reason="owner-only modes and O_NOFOLLOW are POSIX features")
+
 
 def test_second_lock_on_the_same_directory_raises_and_deletes_nothing(tmp_path):
     results = tmp_path / "reports"
@@ -48,6 +50,7 @@ def test_different_directories_do_not_conflict(tmp_path):
         pass
 
 
+@posix_only
 @pytest.mark.parametrize("existing", [False, True])
 def test_lock_permissions_are_owner_only_for_new_and_existing_files(tmp_path, existing):
     if existing:
@@ -62,6 +65,7 @@ def test_lock_permissions_are_owner_only_for_new_and_existing_files(tmp_path, ex
         os.umask(mask)
 
 
+@posix_only
 def test_lock_file_that_is_a_symlink_is_rejected_and_its_target_untouched(tmp_path):
     target = tmp_path / "shared.html"
     target.write_text("data", encoding="utf-8")

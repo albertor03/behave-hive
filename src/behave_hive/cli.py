@@ -9,7 +9,7 @@ from pathlib import Path
 
 from behave_hive.config import load_config
 from behave_hive.errors import HiveError
-from behave_hive.expand import expand_tree
+from behave_hive.expand import expand_features
 from behave_hive.runner import run_suite
 
 __version__ = version("behave-hive")
@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--formats")
     run.add_argument("--config", type=Path)
     run.add_argument("--keep-tmp", action="store_true")
-    expand = sub.add_parser("expand", help="write the features tree with CSV Examples expanded")
+    expand = sub.add_parser("expand", help="write the .feature files with their CSV and JSON Examples expanded")
     expand.add_argument("source", type=Path)
     expand.add_argument("dest", type=Path)
     return parser
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         return exc.code if isinstance(exc.code, int) else 0
     try:
         if args.command == "expand":
-            expand_tree(args.source, args.dest, "en")
+            expand_features(args.source, args.dest, "en")
             return 0
         cli = {
             key: getattr(args, key)

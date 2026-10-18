@@ -1,21 +1,17 @@
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 from behave_hive.privacy import scrub, user_home
-from behave_hive.roots import PathMap
 
 CWD = Path("/Users/tester/project")
 HOME = Path("/Users/tester")
-EXPANDED = CWD / ".behave-hive/run-123/roots/0/features"
-MAPPING = PathMap({EXPANDED: CWD / "features"})
 
 
 @pytest.mark.parametrize(
     "text, expected",
     [
-        (f'File "{EXPANDED}/steps/login.py", line 7', 'File "features/steps/login.py", line 7'),
-        ('.behave-hive/run-123/roots/0/features/steps/login.py:7', 'features/steps/login.py:7'),
+        (f'File "{CWD}/features/steps/login.py", line 7', 'File "features/steps/login.py", line 7'),
         (f'"{CWD}/support.py"', '"support.py"'),
         (f'"{HOME}/.venv/library.py"', '"~/.venv/library.py"'),
         (str(CWD), "."),
@@ -28,29 +24,16 @@ MAPPING = PathMap({EXPANDED: CWD / "features"})
     ],
 )
 def test_scrub_rewrites_only_complete_path_prefixes(text, expected):
-    assert scrub(text, MAPPING, CWD, HOME) == expected
+    assert scrub(text, CWD, HOME) == expected
 
 
-def test_scrub_prefers_longest_overlapping_mapping_and_rewrites_multiple_paths():
-    mapping = PathMap({EXPANDED: CWD / "features", EXPANDED / "nested": CWD / "other"})
-    text = f"{EXPANDED}/nested/a.py\n{EXPANDED}/b.py\n{HOME}/lib.py"
-    assert scrub(text, mapping, CWD, HOME) == "other/a.py\nfeatures/b.py\n~/lib.py"
-
-
-def test_scrub_original_outside_cwd_keeps_path_but_rewrites_home():
-    mapping = PathMap({EXPANDED: HOME / "shared", EXPANDED / "external": Path("/shared")})
-    assert scrub(f"{EXPANDED}/a.py", mapping, CWD, HOME) == "~/shared/a.py"
-    assert scrub(f"{EXPANDED}/external/a.py", mapping, CWD, HOME) == "/shared/a.py"
-
-
-def test_scrub_mapping_outside_cwd_and_project_root_preserves_relative_paths():
-    mapping = PathMap({Path("/elsewhere/expanded"): CWD})
-    assert scrub("/elsewhere/expanded/a.py /elsewhere/expanded", mapping, CWD, HOME) == "a.py ."
-    assert dict(mapping.items()) == {"/elsewhere/expanded": str(CWD)}
+def test_scrub_rewrites_multiple_paths_in_one_text():
+    text = f"{CWD}/features/a.py\n{CWD}/b.py\n{HOME}/lib.py"
+    assert scrub(text, CWD, HOME) == "features/a.py\nb.py\n~/lib.py"
 
 
 def test_scrub_home_equal_to_cwd_prefers_project_relative_paths():
-    assert scrub(f"{HOME}/a.py", PathMap({}), HOME, HOME) == "a.py"
+    assert scrub(f"{HOME}/a.py", HOME, HOME) == "a.py"
 
 
 def test_user_home_is_none_when_the_home_directory_cannot_be_determined(monkeypatch):
@@ -66,6 +49,33 @@ def test_user_home_is_the_home_directory(monkeypatch):
     assert user_home() == HOME
 
 
-def test_scrub_without_a_home_directory_still_rewrites_run_paths():
-    text = f'File "{EXPANDED}/steps/login.py", line 7 in {CWD}/support.py'
-    assert scrub(text, MAPPING, CWD, None) == 'File "features/steps/login.py", line 7 in support.py'
+def test_scrub_without_a_home_directory_still_rewrites_project_paths():
+    text = f'File "{CWD}/features/steps/login.py", line 7 in {CWD}/support.py'
+    assert scrub(text, CWD, None) == 'File "features/steps/login.py", line 7 in support.py'
+
+
+WIN_CWD = PureWindowsPath(r"C:\Users\ana\project")
+WIN_HOME = PureWindowsPath(r"C:\Users\ana")
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        (r'File "C:\Users\ana\project\features\steps\login.py", line 7', 'File "features/steps/login.py", line 7'),
+        (r"C:\\Users\\ana\\project\\features\\a.py", "features/a.py"),
+        (r"c:\users\ANA\Project\x.py", "x.py"),
+        ("C:/Users/ana/project/x.py", "x.py"),
+        (r'"C:\Users\ana\AppData\Local\lib\site.py"', '"~/AppData/Local/lib/site.py"'),
+        (r"C:\Users\ana\project", "."),
+        (r"C:\Users\ana", "~"),
+        (r"C:\Users\bob\x.py C:\Users\ana2\x.py", r"C:\Users\bob\x.py C:\Users\ana2\x.py"),
+        ("features/a.feature:7: failed", "features/a.feature:7: failed"),
+    ],
+)
+def test_scrub_rewrites_windows_paths_in_any_spelling(text, expected):
+    assert scrub(text, WIN_CWD, WIN_HOME) == expected
+    assert "ana" not in scrub(text, WIN_CWD, WIN_HOME).replace("ana2", "")
+
+
+def test_scrub_windows_without_a_home_directory():
+    assert scrub(r"C:\Users\ana\project\a.py C:\Users\ana\x.py", WIN_CWD, None) == r"a.py C:\Users\ana\x.py"

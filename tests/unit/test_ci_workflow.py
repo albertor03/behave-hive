@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -39,11 +40,13 @@ def test_actions_are_pinned_and_workflows_are_bounded(path):
         assert re.search(r"^    timeout-minutes: \d+$", body, re.M), name
 
 
-def test_ci_has_six_jobs_safe_concurrency_and_caches():
+def test_ci_jobs_concurrency_and_caches():
     text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     jobs = set(re.findall(r"^  ([\w-]+):", text.split("\njobs:\n", 1)[1], re.M))
-    assert jobs == {"unit", "e2e", "packaging", "quality", "coverage", "actionlint"}
-    assert 'os: [ubuntu-latest, macos-latest]' in text
+    assert jobs == {
+        "unit", "e2e", "e2e-windows", "packaging", "packaging-windows", "quality", "measure", "coverage", "actionlint",
+    }
+    assert 'os: [ubuntu-latest, macos-latest, windows-latest]' in text
     assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in text
     assert "group: ci-${{ github.workflow }}-${{ github.ref }}" in text
     assert "cancel-in-progress: true" in text
@@ -65,25 +68,45 @@ def test_diagnostic_artifacts_are_uploaded_even_on_failure():
     assert "coverage.txt" in text and ".coverage" in text
 
 
-def coverage_job():
+def job(name):
     text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    return re.search(r"^  coverage:\n(.*?)(?=^  [\w-]+:|\Z)", text, re.M | re.S).group(1)
+    return re.search(rf"^  {name}:\n(.*?)(?=^  [\w-]+:|\Z)", text, re.M | re.S).group(1)
 
 
-def test_exact_coverage_evidence_is_generated_checked_and_always_retained():
+def coverage_job():
+    return job("coverage")
+
+
+def test_windows_runs_unit_e2e_packaging_and_measures_coverage():
+    assert "windows-latest" in job("unit")
+    assert "runs-on: windows-latest" in job("e2e-windows") and "pytest -m e2e" in job("e2e-windows")
+    assert "runs-on: windows-latest" in job("packaging-windows") and "pytest -m packaging" in job("packaging-windows")
+    measure = job("measure")
+    assert "os: [ubuntu-latest, windows-latest]" in measure
+    assert "--cov-fail-under=0" in measure and "name: coverage-data-${{ matrix.os }}" in measure
+    assert "include-hidden-files: true" in measure and "if: always()" in measure
+
+
+def test_exact_coverage_evidence_combines_both_platforms_checks_and_is_always_retained():
     body = coverage_job()
+    assert "needs: measure" in body
     assert 'python-version: "3.14"' in body
-    assert "set -o pipefail" in body
-    assert "mkdir -p .artifacts" in body
-    assert "--cov-report=json " in body and "--cov-report=xml " in body
-    assert "| tee .artifacts/coverage.txt" in body
+    assert "pattern: coverage-data-*" in body
+    assert "python -m coverage combine .artifacts/data/*/.coverage" in body
+    for report in ("coverage json", "coverage xml", "| tee .artifacts/coverage.txt"):
+        assert report in body
     check = re.search(r"      - name: Check exact coverage counters\n(.*?)(?=^      - |\Z)", body, re.M | re.S)
     assert check and "if: always()" in check.group(1)
     upload = body.split("      - uses: actions/upload-artifact@", 1)[1]
     assert "if: always()" in upload and "retention-days: 7" in upload
     for artifact in (".coverage", "coverage.xml", "coverage.txt", "coverage.json"):
         assert f"            .artifacts/{artifact}\n" in upload
-    assert body.index("--cov-report=json ") < check.start() < body.index("actions/upload-artifact@")
+    assert body.index("coverage combine") < check.start() < body.index("actions/upload-artifact@")
+
+
+def test_coverage_paths_treat_linux_and_windows_checkouts_as_the_same_files():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["coverage"]["paths"]
+    assert config["source"] == ["src/behave_hive", "*/src/behave_hive", "*\\src\\behave_hive"]
 
 
 @pytest.mark.parametrize("gap", ["statement", "branch", "excluded", "missing-report", "complete"])

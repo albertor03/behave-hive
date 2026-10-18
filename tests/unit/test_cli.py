@@ -62,7 +62,7 @@ def test_expand_writes_the_expanded_tree(tmp_path, capsys):
     dst = tmp_path / "out"
     assert cli.main(["expand", str(src), str(dst)]) == 0
     assert "| v |\n      | 1 |" in (dst / "a.feature").read_text()
-    assert (dst / "v.csv").is_symlink()
+    assert not (dst / "v.csv").exists()
 
 
 def test_expand_reexpansion_removes_stale_feature(tmp_path):
@@ -131,6 +131,17 @@ def test_run_reports_inline_and_csv_example_tables_and_the_csv_files(project):
     assert "Examples: 1 inline, 1 from CSV" in result.stdout
     assert "features/data/values.csv" in result.stdout
     assert "Mode: sequential" in result.stdout
+
+
+def test_run_expands_data_tables_in_memory_without_a_copy_or_symlinks(project):
+    csv_project(project)
+    feature = project.root / "features" / "login.feature"
+    before = feature.read_text(encoding="utf-8")
+    result = hive(project, "run", "--parallel", "-w", "2", "--keep-tmp")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (project.root / ".behave-hive").exists()
+    assert [p for p in project.root.rglob("*") if p.is_symlink()] == []
+    assert feature.read_text(encoding="utf-8") == before
 
 
 def test_run_json_only_suite_passes_every_object_and_reports_the_json_tables(project):

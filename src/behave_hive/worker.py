@@ -12,10 +12,10 @@ from behave.exception import TagExpressionError
 from behave.formatter.base import StreamOpener
 
 from behave_hive.config import build_behave_config
+from behave_hive.parsing import install
 
 CUCUMBER = "behave_hive.formatters.cucumber:CucumberJSONFormatter"
 ALLURE = "behave_hive.formatters.allure:AllureFormatter"
-PATH_MAP_KEY = "behave_hive.path_map"
 
 
 def _write_environment(allure_dir: Path, environment: dict[str, str]) -> None:
@@ -46,7 +46,7 @@ def run_plan(plan: dict) -> int:
     config.format = formats
     config.outputs = outputs
     config.show_skipped = True
-    config.userdata[PATH_MAP_KEY] = json.dumps(plan.get("path_map", {}))
+    install()
     return run_behave(config)
 
 

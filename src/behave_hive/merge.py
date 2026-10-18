@@ -9,9 +9,7 @@ from pathlib import Path
 
 from behave_hive.errors import HiveError
 from behave_hive.expand import RowSource
-from behave_hive.formatters.cucumber import feature_id
 from behave_hive.privacy import scrub, user_home
-from behave_hive.roots import PathMap
 
 EXTENSION = "x-behave-hive"
 
@@ -28,34 +26,12 @@ def _absolute(text: str, cwd: Path) -> Path:
     return path if path.is_absolute() else cwd / path
 
 
-def _to_original(text: str, path_map: PathMap, cwd: Path) -> str:
-    """Rewrite `text` (a path) from the expanded tree to the original one, relative to `cwd`."""
-    absolute = _absolute(text, cwd)
-    mapped = path_map.to_original(absolute)
-    if mapped == absolute:
-        return text
-    try:
-        return mapped.relative_to(cwd).as_posix()
-    except ValueError:
-        return mapped.as_posix()
-
-
-def _rewrite_location(location: str, path_map: PathMap, cwd: Path) -> str:
-    path, sep, line = location.rpartition(":")
-    if not sep or not line.isdigit():
-        return location
-    return f"{_to_original(path, path_map, cwd)}:{line}"
-
-
-def _rewrite_hooks_and_steps(element: dict, path_map: PathMap, cwd: Path) -> None:
+def _scrub_hooks_and_steps(element: dict, cwd: Path) -> None:
     home = user_home()
     for item in (*element.get("steps", []), *element.get("before", []), *element.get("after", [])):
-        match = item.get("match")
-        if match and "location" in match:
-            match["location"] = _rewrite_location(match["location"], path_map, cwd)
         result = item.get("result", {})
         if "error_message" in result:
-            result["error_message"] = scrub(result["error_message"], path_map, cwd, home)
+            result["error_message"] = scrub(result["error_message"], cwd, home)
 
 
 def pair_backgrounds(elements: list[dict]) -> list[tuple[dict | None, dict]]:
@@ -71,31 +47,26 @@ def pair_backgrounds(elements: list[dict]) -> list[tuple[dict | None, dict]]:
     return pairs
 
 
-def _attach_source(scenario: dict, source: RowSource, path_map: PathMap, cwd: Path) -> None:
-    data_path = _to_original(str(source.data_path), path_map, cwd)
+def _attach_source(scenario: dict, source: RowSource, cwd: Path) -> None:
+    data_path = source.data_path
     with suppress(ValueError):
-        data_path = Path(data_path).relative_to(cwd).as_posix()
-    scenario.setdefault(EXTENSION, {})["source"] = {"data_path": data_path, "data_row": source.data_row}
+        data_path = data_path.relative_to(cwd)
+    scenario.setdefault(EXTENSION, {})["source"] = {"data_path": data_path.as_posix(), "data_row": source.data_row}
 
 
-def _rewrite_feature(
-    feature: dict, path_map: PathMap, sources: dict[Path, list[RowSource]], cwd: Path
+def _annotate_feature(
+    feature: dict, sources: dict[Path, list[RowSource]], cwd: Path
 ) -> list[tuple[dict | None, dict]]:
-    """Rewrite `feature` in place to its original uri and ids; return its background/scenario pairs."""
+    """Scrub `feature` in place and attach the data-file source of its rows; return its background/scenario pairs."""
     row_sources = {s.expanded_line: s for s in sources.get(_absolute(feature["uri"], cwd), [])}
-    uri = _to_original(feature["uri"], path_map, cwd)
-    old_id, new_id = feature["id"], feature_id(uri)
     pairs = pair_backgrounds(feature["elements"])
     for background, scenario in pairs:
         for element in (background, scenario):
             if element is not None:
-                _rewrite_hooks_and_steps(element, path_map, cwd)
-        if scenario["id"].startswith(old_id):
-            scenario["id"] = new_id + scenario["id"][len(old_id):]
+                _scrub_hooks_and_steps(element, cwd)
         source = row_sources.get(scenario["line"])
         if source is not None:
-            _attach_source(scenario, source, path_map, cwd)
-    feature["uri"], feature["id"] = uri, new_id
+            _attach_source(scenario, source, cwd)
     return pairs
 
 
@@ -107,18 +78,17 @@ def _order_elements(pairs: list[tuple[dict | None, dict]]) -> list[dict]:
 
 def merge(
     partials: list[list[dict]],
-    path_map: PathMap,
     sources: dict[Path, list[RowSource]],
     cwd: Path | None = None,
 ) -> Report:
-    """Merge the partial results, in batch order, into one report with original paths."""
+    """Merge the partial results, in batch order, into one report."""
     cwd = Path(cwd) if cwd is not None else Path.cwd()
     by_uri: dict[str, dict] = {}
     pairs_by_uri: dict[str, list[tuple[dict | None, dict]]] = {}
 
     for partial in partials:
         for feature in copy.deepcopy(partial):
-            pairs = _rewrite_feature(feature, path_map, sources, cwd)
+            pairs = _annotate_feature(feature, sources, cwd)
             by_uri.setdefault(feature["uri"], feature)
             pairs_by_uri.setdefault(feature["uri"], []).extend(pairs)
 

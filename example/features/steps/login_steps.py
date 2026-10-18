@@ -2,7 +2,6 @@ from pathlib import Path
 
 from behave import given, then, when
 
-# resolve(): behave-hive runs the steps through a symlink from the expanded tree
 APP = Path(__file__).resolve().parents[2] / "app" / "login.html"
 
 

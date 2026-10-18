@@ -13,7 +13,9 @@ for branch in main develop; do
     "unit (ubuntu-latest, 3.13)", "unit (ubuntu-latest, 3.14)",
     "unit (macos-latest, 3.11)", "unit (macos-latest, 3.12)",
     "unit (macos-latest, 3.13)", "unit (macos-latest, 3.14)",
-    "e2e", "packaging", "quality", "coverage", "actionlint"
+    "unit (windows-latest, 3.11)", "unit (windows-latest, 3.12)",
+    "unit (windows-latest, 3.13)", "unit (windows-latest, 3.14)",
+    "e2e", "e2e (windows)", "packaging", "packaging (windows)", "quality", "coverage", "actionlint"
   ]},
   "enforce_admins":true,
   "required_pull_request_reviews":{"required_approving_review_count":0,"dismiss_stale_reviews":true},

@@ -68,12 +68,14 @@ jobs:
           retention-days: 7
 
   test-install:
+    name: test-install (${{ matrix.os }}, ${{ matrix.installer }})
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         installer: [pip, uv]
     steps:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -87,17 +89,19 @@ jobs:
         with:
           enable-cache: false
       - name: Install and compare the wheel version
+        shell: bash
         env:
           INSTALLER: ${{ matrix.installer }}
           VERSION: ${{ needs.build.outputs.version }}
+          BIN: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
         run: |
           python -m venv .venv-release
           if [[ "$INSTALLER" == pip ]]; then
-            .venv-release/bin/python -m pip install dist/*.whl
+            ".venv-release/$BIN/python" -m pip install dist/*.whl
           else
-            uv pip install --python .venv-release/bin/python dist/*.whl
+            uv pip install --python ".venv-release/$BIN/python" dist/*.whl
           fi
-          test "$(.venv-release/bin/behave-hive --version)" = "behave-hive $VERSION"
+          test "$(".venv-release/$BIN/behave-hive" --version | tr -d '\r')" = "behave-hive $VERSION"
 
   publish:
     needs: test-install

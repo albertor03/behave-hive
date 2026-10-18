@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import suppress
 from pathlib import Path
 from uuid import uuid4
@@ -28,10 +27,8 @@ except ImportError as exc:
     raise HiveError('the allure format needs allure-behave: pip install "behave-hive[allure]"') from exc
 
 from behave_hive.privacy import scrub, user_home
-from behave_hive.roots import PathMap
 from behave_hive.selection import SelectionSnapshot
 
-PATH_MAP_KEY = "behave_hive.path_map"
 EXTENSIONS = {kind.mime_type: kind.extension for kind in AttachmentType}
 
 
@@ -48,13 +45,10 @@ class HiveAllureFileLogger(AllureFileLogger):
 
 
 class HiveAllureListener(AllureListener):
-    """Never drops a result, turns hook failures into `broken` and reports original paths."""
+    """Never drops a result, turns hook failures into `broken` and scrubs the user's directories."""
 
     def __init__(self, behave_config):
         super().__init__(behave_config)
-        raw = json.loads(behave_config.userdata.get(PATH_MAP_KEY) or "{}")
-        self.path_map = PathMap({Path(expanded): Path(original) for expanded, original in raw.items()})
-        self.has_path_map = bool(raw)
 
     def scrub_result(self, result):
         """Scrub status details recursively, including nested steps and fixtures."""
@@ -63,7 +57,7 @@ class HiveAllureListener(AllureListener):
             for key in ("message", "trace"):
                 value = getattr(details, key)
                 if value is not None:
-                    setattr(details, key, scrub(value, self.path_map, Path.cwd(), user_home()))
+                    setattr(details, key, scrub(value, Path.cwd(), user_home()))
         for key in ("steps", "befores", "afters"):
             for child in getattr(result, key, []):
                 self.scrub_result(child)
@@ -79,19 +73,17 @@ class HiveAllureListener(AllureListener):
 
     def start_scenario(self, scenario):
         super().start_scenario(scenario)
-        if self.has_path_map:
-            result = self.logger.get_test(self.current_scenario_uuid)
-            result.titlePath = self._title_path(scenario)
+        result = self.logger.get_test(self.current_scenario_uuid)
+        result.titlePath = self._title_path(scenario)
 
     def _title_path(self, scenario) -> list[str]:
         """Directory of the original `.feature` (relative to the cwd) followed by the feature name."""
         cwd = Path.cwd()
         filename = Path(scenario.filename)
         absolute = filename if filename.is_absolute() else cwd / filename
-        original = self.path_map.to_original(absolute)
         with suppress(ValueError):
-            original = original.relative_to(cwd)
-        return [*original.parts[:-1], scenario.feature.name or original.name or scenario.feature.keyword]
+            absolute = absolute.relative_to(cwd)
+        return [*absolute.parts[:-1], scenario.feature.name or absolute.name or scenario.feature.keyword]
 
     def stop_scenario(self, scenario):
         status = scenario_status(scenario)
