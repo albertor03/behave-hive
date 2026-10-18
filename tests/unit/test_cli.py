@@ -97,11 +97,6 @@ Feature: Login
 """
 
 
-@pytest.fixture
-def project(make_project):
-    return make_project()
-
-
 def hive(project, *args, timeout=120):
     return project.run("behave_hive.cli", *args, timeout=timeout)
 

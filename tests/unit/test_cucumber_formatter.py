@@ -17,11 +17,6 @@ from behave_hive.status import scenario_status
 FORMATTER = "behave_hive.formatters.cucumber:CucumberJSONFormatter"
 
 
-@pytest.fixture
-def project(make_project):
-    return make_project()
-
-
 def run_json(project, *args, expect=(0, 1)):
     result = project.run("behave", "features", "-f", FORMATTER, "-o", "out.json", *args)
     assert result.returncode in expect, result.stdout + result.stderr

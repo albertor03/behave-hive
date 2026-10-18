@@ -9,6 +9,7 @@ from behave.parser import ParserError, parse_file
 
 from behave_hive.config import build_behave_config, validate_effective
 from behave_hive.errors import ConfigError, HiveError
+from behave_hive.roots import feature_files
 
 SETUP_TAGS = ("setup", "teardown")
 
@@ -25,15 +26,6 @@ class Unit:
         return str(self.path), self.line or 0
 
 
-def _feature_files(inputs: list[Path]) -> list[Path]:
-    """Absolute `.feature` paths of the inputs, sorted and without duplicates."""
-    files = set()
-    for item in inputs:
-        item = Path(item).resolve()
-        files.update(sorted(item.rglob("*.feature")) if item.is_dir() else [item])
-    return sorted(files)
-
-
 def discover_units(inputs: list[Path], behave_args: list[str], *, scheme: str, parallel: bool) -> list[Unit]:
     """Units of the features under `inputs` that match the effective tag expression.
 
@@ -44,7 +36,7 @@ def discover_units(inputs: list[Path], behave_args: list[str], *, scheme: str, p
     per_scenario = parallel and scheme == "scenario"
 
     units: list[Unit] = []
-    for path in _feature_files(inputs):
+    for path in feature_files(inputs):
         try:
             feature = parse_file(str(path), language=config.lang)
         except ParserError as exc:

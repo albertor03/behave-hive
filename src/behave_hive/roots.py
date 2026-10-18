@@ -22,6 +22,15 @@ def find_root(path: Path) -> Path:
     raise HiveError(f"no features root found for {path}: no parent directory contains 'steps/'")
 
 
+def feature_files(inputs: list[Path]) -> list[Path]:
+    """Absolute `.feature` paths of the inputs, sorted and without duplicates."""
+    files: set[Path] = set()
+    for item in inputs:
+        item = Path(item).resolve()
+        files.update(item.rglob("*.feature") if item.is_dir() else [item])
+    return sorted(files)
+
+
 def group_by_root(inputs: list[Path]) -> dict[Path, list[Path]]:
     """Group resolved inputs by their root, in order of first appearance."""
     grouped: dict[Path, list[Path]] = {}

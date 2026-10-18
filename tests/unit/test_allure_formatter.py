@@ -19,11 +19,6 @@ Feature: F
 """
 
 
-@pytest.fixture
-def project(make_project):
-    return make_project()
-
-
 def run_allure(project, *args, target="features"):
     result = project.run("behave", target, "-f", FORMATTER, "-o", "allure", *args)
     assert result.returncode in (0, 1), result.stdout + result.stderr

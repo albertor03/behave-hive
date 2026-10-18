@@ -10,12 +10,11 @@ import pytest
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
 from behave_hive.errors import HiveError
+from behave_hive.execution import build_command, execute_batches
 from behave_hive.html_report import REPORT_MARKER
 from behave_hive.runner import (
-    build_command,
     build_plan,
     clean_managed,
-    execute_batches,
     prepare_jobs,
     remove_stale_report,
     remove_tmp,

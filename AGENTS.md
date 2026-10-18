@@ -15,7 +15,7 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 | Path | Contents |
 |---|---|
 | `STATUS.md` | Verified project snapshot, delivery state and pending work; distinguish implementation from integration/publication. |
-| `src/behave_hive/` | The package. One module per concern: `expand`, `roots`, `config`, `discovery`, `batching`, `selection`, `status`, `worker`, `lock`, `runner`, `merge`, `summary`, `html_report`, `cli`, `formatters/`. |
+| `src/behave_hive/` | The package. One module per concern: `expand`, `roots`, `config`, `discovery`, `batching`, `selection`, `status`, `worker`, `lock`, `execution`, `runner`, `merge`, `summary`, `html_report`, `cli`, `formatters/`. |
 | `tests/unit/` | Fast tests, no browser. |
 | `tests/e2e/` | Runs `example/` with Playwright (`e2e` marker). |
 | `tests/packaging/` | Builds and installs the wheel with pip and uv (`packaging` marker). |

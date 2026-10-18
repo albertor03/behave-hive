@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="$marker">
+<!--CSP-->
+<title>$report_name</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d2330; --muted: #5d6677; --border: #d9dde6; --card: #f6f7fa; --accent: #3a5bd9;
+  --passed: #1a7f37; --failed: #cf222e; --undefined: #9a6700; --pending: #8250df; --skipped: #6e7781;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c; --fg: #e6e9f0; --muted: #98a1b3; --border: #2a3040; --card: #1a1f2a; --accent: #7d96ff;
+    --passed: #3fb950; --failed: #ff7b72; --undefined: #d29922; --pending: #bc8cff; --skipped: #8b949e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; }
+h1 { font-size: 1.5rem; margin: 0 0 4px; }
+h2 { font-size: 1.05rem; margin: 0 0 8px; }
+h2 small { color: var(--muted); font-weight: normal; margin-left: 8px; }
+.totals { color: var(--muted); margin: 0 0 12px; }
+.statusbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--border); margin: 0 0 24px; }
+.statusbar span { display: block; height: 100%; }
+.bg-passed { background: var(--passed); } .bg-failed { background: var(--failed); }
+.bg-undefined { background: var(--undefined); } .bg-pending { background: var(--pending); }
+.bg-skipped { background: var(--skipped); }
+.passed { color: var(--passed); } .failed { color: var(--failed); } .undefined { color: var(--undefined); }
+.pending { color: var(--pending); } .skipped { color: var(--skipped); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 0 0 24px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
+.card h3 { margin: 0 0 8px; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.donut-wrap { display: flex; gap: 16px; align-items: center; }
+.donut { width: 96px; height: 96px; border-radius: 50%; flex: none; position: relative; }
+.donut::after { content: ""; position: absolute; inset: 22px; border-radius: 50%; background: var(--card); }
+.legend { list-style: none; margin: 0; padding: 0; font-size: .9rem; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.bars { list-style: none; margin: 0; padding: 0; font-size: .85rem; }
+.bars li { margin: 6px 0; }
+.bars .track { display: block; height: 6px; background: var(--border); border-radius: 3px; margin-top: 2px; }
+.bars .track span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.slowest { margin: 0; padding-left: 20px; font-size: .85rem; }
+.slowest li { margin: 4px 0; }
+.slowest small, .muted { color: var(--muted); }
+table.features { width: 100%; border-collapse: collapse; margin: 0 0 24px; font-size: .9rem; }
+table.features th, table.features td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+table.features thead th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
+table.features tr.totals-row th, table.features tr.totals-row td {
+  border-top: 2px solid var(--border); font-weight: 600; }
+.bar { display: inline-block; vertical-align: middle; width: 90px; height: 8px; background: var(--border);
+  border-radius: 4px; overflow: hidden; margin-right: 8px; }
+.bar span { display: block; height: 100%; background: var(--passed); }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 12px; }
+.toolbar[hidden] { display: none; }
+.toolbar input, .toolbar select, .toolbar button { font: inherit; padding: 6px 10px; color: var(--fg);
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
+.toolbar input { min-width: 220px; flex: 1; }
+.toolbar button { cursor: pointer; }
+.note { color: var(--muted); font-size: .9rem; }
+section.feature { margin: 0 0 24px; }
+section.feature[hidden], details.scenario[hidden] { display: none; }
+details.scenario { background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  margin: 6px 0; padding: 6px 12px; }
+details.scenario > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.status { font-weight: 600; text-transform: uppercase; font-size: .72rem; letter-spacing: .03em; }
+.chip { font-size: .75rem; padding: 0 6px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }
+.source, .duration { color: var(--muted); font-size: .85rem; }
+.duration { margin-left: auto; }
+ol.steps { margin: 8px 0 4px; padding-left: 22px; }
+ol.steps li { margin: 4px 0; }
+pre { margin: 4px 0 8px; padding: 8px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-size: .8rem; }
+table.rows { border-collapse: collapse; margin: 4px 0; font-size: .85rem; }
+table.rows th, table.rows td { border: 1px solid var(--border); padding: 2px 8px; text-align: left; }
+.hook { margin: 6px 0; }
+label.zoom { display: block; margin: 6px 0; cursor: zoom-in; }
+label.zoom input { display: none; }
+label.zoom img { max-width: 320px; max-height: 200px; border: 1px solid var(--border); border-radius: 4px; }
+label.zoom input:checked + img { max-width: 100%; max-height: none; cursor: zoom-out; }
+</style>
+</head>
+<body>
+<main>
+<h1>$report_name</h1>
+<p class="totals">$totals</p>
+<div class="statusbar">$statusbar</div>
+<section class="metrics">
+$metrics
+</section>
+<table class="features">
+<thead><tr><th>Feature</th><th>Total</th><th>Executed</th><th>Pass</th><th>Duration</th></tr></thead>
+<tbody>
+$feature_rows
+$totals_row
+</tbody>
+</table>
+<div class="toolbar" hidden>
+<input id="search" type="search" placeholder="Search scenario name..." aria-label="Search scenarios">
+<select id="status-filter" aria-label="Filter by status"><option value="">All statuses</option>$status_options</select>
+<select id="tag-filter" aria-label="Filter by tag"><option value="">All tags</option>$tag_options</select>
+<button type="button" id="reset">Reset</button>
+<button type="button" id="expand-all">Expand all</button>
+<button type="button" id="collapse-all">Collapse all</button>
+<span class="note" id="shown"></span>
+</div>
+<noscript><p class="note">Filters need JavaScript; every scenario is listed below and can be expanded.</p></noscript>
+$features
+</main>
+<script>
+(function () {
+  var bar = document.querySelector(".toolbar");
+  if (!bar) { return; }
+  bar.hidden = false;
+  var search = document.getElementById("search");
+  var status = document.getElementById("status-filter");
+  var tag = document.getElementById("tag-filter");
+  var shown = document.getElementById("shown");
+  var scenarios = Array.prototype.slice.call(document.querySelectorAll("details.scenario"));
+  var features = Array.prototype.slice.call(document.querySelectorAll("section.feature"));
+  function apply() {
+    var text = search.value.trim().toLowerCase();
+    var visible = 0;
+    scenarios.forEach(function (el) {
+      var ok = (!text || el.getAttribute("data-name").indexOf(text) !== -1) &&
+        (!status.value || el.getAttribute("data-status") === status.value) &&
+        (!tag.value || (" " + el.getAttribute("data-tags") + " ").indexOf(" " + tag.value + " ") !== -1);
+      el.hidden = !ok;
+      if (ok) { visible += 1; }
+    });
+    features.forEach(function (section) {
+      section.hidden = !section.querySelector("details.scenario:not([hidden])");
+    });
+    shown.textContent = "Showing " + visible + " of " + scenarios.length;
+  }
+  function setOpen(open) {
+    scenarios.forEach(function (el) { if (!el.hidden) { el.open = open; } });
+  }
+  search.addEventListener("input", apply);
+  status.addEventListener("change", apply);
+  tag.addEventListener("change", apply);
+  document.getElementById("reset").addEventListener("click", function () {
+    search.value = ""; status.value = ""; tag.value = ""; apply();
+  });
+  document.getElementById("expand-all").addEventListener("click", function () { setOpen(true); });
+  document.getElementById("collapse-all").addEventListener("click", function () { setOpen(false); });
+  apply();
+})();
+</script>
+</body>
+</html>

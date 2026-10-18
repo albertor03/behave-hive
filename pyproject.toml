@@ -47,6 +47,9 @@ behave-hive = "behave_hive.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+behave_hive = ["templates/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
@@ -68,10 +71,6 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # Tests intentionally assert results and launch controlled subprocess commands.
 "tests/**" = ["S101", "S603", "S607"]
-# Temporary baseline complexity debt, removed by harden-and-polish group 4 (US-10).
-"src/behave_hive/expand.py" = ["C901"]
-"src/behave_hive/merge.py" = ["C901"]
-"src/behave_hive/runner.py" = ["C901"]
 # Release validation invokes only git with fixed options and a fully validated tag.
 ".github/scripts/check_release.py" = ["S603", "S607"]
 

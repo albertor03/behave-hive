@@ -48,21 +48,17 @@ def _rewrite_location(location: str, path_map: PathMap, cwd: Path) -> str:
 
 
 def _rewrite_hooks_and_steps(element: dict, path_map: PathMap, cwd: Path) -> None:
-    for step in element.get("steps", []):
-        match = step.get("match")
+    home = user_home()
+    for item in (*element.get("steps", []), *element.get("before", []), *element.get("after", [])):
+        match = item.get("match")
         if match and "location" in match:
             match["location"] = _rewrite_location(match["location"], path_map, cwd)
-    for item in (*element.get("steps", []), *element.get("before", []), *element.get("after", [])):
         result = item.get("result", {})
         if "error_message" in result:
-            result["error_message"] = scrub(result["error_message"], path_map, cwd, user_home())
-    for hook in (*element.get("before", []), *element.get("after", [])):
-        match = hook.get("match")
-        if match and "location" in match:
-            match["location"] = _rewrite_location(match["location"], path_map, cwd)
+            result["error_message"] = scrub(result["error_message"], path_map, cwd, home)
 
 
-def _pairs(elements: list[dict]) -> list[tuple[dict | None, dict]]:
+def pair_backgrounds(elements: list[dict]) -> list[tuple[dict | None, dict]]:
     """(background or None, scenario): a background is the element right before a scenario."""
     pairs = []
     pending = None
@@ -73,6 +69,40 @@ def _pairs(elements: list[dict]) -> list[tuple[dict | None, dict]]:
             pairs.append((pending, element))
             pending = None
     return pairs
+
+
+def _attach_source(scenario: dict, source: RowSource, path_map: PathMap, cwd: Path) -> None:
+    csv_path = _to_original(str(source.csv_path), path_map, cwd)
+    with suppress(ValueError):
+        csv_path = Path(csv_path).relative_to(cwd).as_posix()
+    scenario.setdefault(EXTENSION, {})["source"] = {"csv_path": csv_path, "csv_row": source.csv_row}
+
+
+def _rewrite_feature(
+    feature: dict, path_map: PathMap, sources: dict[Path, list[RowSource]], cwd: Path
+) -> list[tuple[dict | None, dict]]:
+    """Rewrite `feature` in place to its original uri and ids; return its background/scenario pairs."""
+    row_sources = {s.expanded_line: s for s in sources.get(_absolute(feature["uri"], cwd), [])}
+    uri = _to_original(feature["uri"], path_map, cwd)
+    old_id, new_id = feature["id"], feature_id(uri)
+    pairs = pair_backgrounds(feature["elements"])
+    for background, scenario in pairs:
+        for element in (background, scenario):
+            if element is not None:
+                _rewrite_hooks_and_steps(element, path_map, cwd)
+        if scenario["id"].startswith(old_id):
+            scenario["id"] = new_id + scenario["id"][len(old_id):]
+        source = row_sources.get(scenario["line"])
+        if source is not None:
+            _attach_source(scenario, source, path_map, cwd)
+    feature["uri"], feature["id"] = uri, new_id
+    return pairs
+
+
+def _order_elements(pairs: list[tuple[dict | None, dict]]) -> list[dict]:
+    """Scenarios in line order, each preceded by its background."""
+    ordered = sorted(pairs, key=lambda pair: pair[1]["line"])
+    return [e for background, scenario in ordered for e in (background, scenario) if e is not None]
 
 
 def merge(
@@ -88,39 +118,14 @@ def merge(
 
     for partial in partials:
         for feature in copy.deepcopy(partial):
-            expanded = _absolute(feature["uri"], cwd)
-            uri = _to_original(feature["uri"], path_map, cwd)
-            old_id = feature["id"]
-            new_id = feature_id(uri)
-            row_sources = {s.expanded_line: s for s in sources.get(expanded, [])}
-            pairs = _pairs(feature["elements"])
-            for background, scenario in pairs:
-                for element in (background, scenario):
-                    if element is not None:
-                        _rewrite_hooks_and_steps(element, path_map, cwd)
-                if scenario["id"].startswith(old_id):
-                    scenario["id"] = new_id + scenario["id"][len(old_id):]
-                source = row_sources.get(scenario["line"])
-                if source is not None:
-                    csv_path = _to_original(str(source.csv_path), path_map, cwd)
-                    with suppress(ValueError):
-                        csv_path = Path(csv_path).relative_to(cwd).as_posix()
-                    scenario.setdefault(EXTENSION, {})["source"] = {
-                        "csv_path": csv_path,
-                        "csv_row": source.csv_row,
-                    }
-            feature["uri"], feature["id"] = uri, new_id
-            if uri not in by_uri:
-                by_uri[uri] = feature
-                pairs_by_uri[uri] = []
-            pairs_by_uri[uri].extend(pairs)
+            pairs = _rewrite_feature(feature, path_map, sources, cwd)
+            by_uri.setdefault(feature["uri"], feature)
+            pairs_by_uri.setdefault(feature["uri"], []).extend(pairs)
 
     features = []
     for uri in sorted(by_uri):
-        feature = by_uri[uri]
-        ordered = sorted(pairs_by_uri[uri], key=lambda pair: pair[1]["line"])
-        feature["elements"] = [e for background, scenario in ordered for e in (background, scenario) if e is not None]
-        features.append(feature)
+        by_uri[uri]["elements"] = _order_elements(pairs_by_uri[uri])
+        features.append(by_uri[uri])
 
     _check_unique(features)
     return Report(features)
