@@ -321,7 +321,7 @@ def render(
         tag_options="".join(f'<option value="{escape(t)}">{escape(t)}</option>' for t in tags),
         features=sections,
     )
-    script = re.search(r"<script>(.*?)</script>", page, re.S)[1]
+    script = page.partition("<script>")[2].partition("</script>")[0]
     digest = base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii")
     policy = f"default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'sha256-{digest}'"
     return page.replace("<!--CSP-->", f'<meta http-equiv="Content-Security-Policy" content="{policy}">', 1)

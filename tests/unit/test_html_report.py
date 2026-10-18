@@ -275,7 +275,7 @@ def test_csp_hash_matches_the_exact_emitted_script():
     page = html([feature([scenario("<script>hostile</script>")])])
     policy = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)"', page)
     assert policy
-    script = re.search(r"<script>(.*?)</script>", page, re.S).group(1)
+    script = page.partition("<script>")[2].partition("</script>")[0]
     digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
     assert f"script-src 'sha256-{digest}'" in policy.group(1)
     assert "default-src 'none'" in policy.group(1)
