@@ -13,11 +13,11 @@ work pending. Implementation is paused. The tracking board is
 
 | Check | Latest verified result |
 | --- | --- |
-| Entire test suite | **648 passed** (630 unit + 18 e2e/packaging) |
-| Unit tests | 630 passed |
-| E2E and packaging tests | 18 passed (12 e2e, 6 packaging with clean pip/uv installs) |
-| Library statements | **1559 / 1559 covered; 0 missing** |
-| Library branches | **468 / 468 covered; 0 missing** |
+| Entire test suite | **691 passed** (664 unit + 27 e2e/packaging) |
+| Unit tests | 664 passed |
+| E2E and packaging tests | 27 passed (21 e2e, 6 packaging with clean pip/uv installs) |
+| Library statements | **1660 / 1660 covered; 0 missing** |
+| Library branches | **490 / 490 covered; 0 missing** |
 | Coverage exclusions | 0 excluded lines; all 20 library Python files included |
 | Quality | Ruff, source pylint duplication and pip-audit pass |
 | Workflow validation | actionlint 1.7.12 and local workflow contract tests pass |
@@ -57,21 +57,20 @@ the decoded screenshot work with CSP active and no browser console errors.
 | HU-6: example and usage docs | Implemented and integrated | Later docs track implemented extensions |
 | HU-7: original Allure paths and HTML v2 | Implemented and integrated | Error privacy is implemented in HU-9; diagnostics remain HU-11 |
 | HU-8: quality gates | Integrated into develop | Exact-100 strengthening is implemented in HU-16 |
-| HU-9: privacy/security | Tasks 3.1–3.9 done; `/security-review` and `/code-review` ran on 2026-10-18 and confirmed findings are fixed | Fixes after `63d4c4c` are uncommitted; authorized integration |
-| HU-10: refactor | 9/9 tasks done on `feature/us-10-refactor`, uncommitted | Authorized commit and integration |
-| HU-11: diagnostics | Not implemented | All ten tasks, including Allure attachments and environment metadata |
+| HU-9: privacy/security | Integrated into develop (`e8ac043`), reviews done | None in this story |
+| HU-10: refactor | Integrated into develop (`a7a9e82`) | None in this story |
+| HU-11: diagnostics | 10/10 tasks done on `feature/us-11-report-v3`, uncommitted | Authorized commit and integration |
 | HU-12: hardened CI | Implemented and integrated into develop | Real CI, second-run cache and failing-run artifact evidence |
 | HU-13: repository scanning | Implemented and integrated into develop | Real CodeQL/dependency-review execution |
 | HU-14: release pipeline/settings script | Implemented and integrated into develop | Approved remote setup, publisher, rehearsal and release |
-| HU-15: HTML name/path | 6/6 implementation tasks verified | Review, commit/integration and archive |
-| HU-16: exact library coverage | 16/16 implementation tasks verified | Review, commit/integration and archive |
+| HU-15: HTML name/path | Integrated into develop with HU-9 (`63d4c4c`) | Archive follow-up |
+| HU-16: exact library coverage | Integrated into develop with HU-9 (`63d4c4c`) | Archive follow-up |
 
-`develop` points to `69c85fd`. The active branch `feature/us-9-security` is one
-commit ahead (`63d4c4c`, which combines HU-9, HU-15 and HU-16) and its working tree
-holds the uncommitted review fixes. `main` still points to the initial `fcb852b`
-commit. No Git remote is configured (`origin/HEAD` is only a local ref used by
-`/security-review`), and no GitHub/PyPI publication or remote settings application
-has been performed.
+`develop` points to `a7a9e82` (HU-9, HU-10, HU-15 and HU-16 merged). The active branch
+`feature/us-11-report-v3` holds the uncommitted HU-11 work. `main` still points to the
+initial `fcb852b` commit. No Git remote is configured (`origin/HEAD` is only a local ref
+used by `/security-review`), and no GitHub/PyPI publication or remote settings
+application has been performed.
 
 Already integrated merges: HU-8 `1c778a4`, HU-12 `3f78906`, HU-13 `662932f`,
 HU-14 `69c85fd`. New commits/merges, pushes, tags, external settings and publication
@@ -85,7 +84,7 @@ from complete planning artifacts and from release/integration completion.
 | Change | Checked tasks | Pending |
 | --- | ---: | --- |
 | `add-behave-hive-mvp` | **64/66** | 10.3 real CI and 10.5 approved repository publication |
-| `harden-and-polish-behave-hive` | **35/48** | HU-11 and final closure/integration |
+| `harden-and-polish-behave-hive` | **47/48** | Trello closure (6.3) and integration of HU-11 |
 | `add-github-actions-pipeline` | **18/24** | Settings/publisher, Trello/integration closure and real CI/release runs |
 | `configure-html-report-name` | **6/6** | Review/integration/archive follow-up |
 | `reach-full-library-coverage` | **16/16** | Review/integration/archive follow-up |
@@ -100,12 +99,9 @@ pending. No change has been archived.
   Findings 9 and 10 are deferred to HU-10.
 - [x] **HU-10:** done on `feature/us-10-refactor`, `/simplify` included; see
   `baseline.md` "After HU-10".
-- [ ] **HU-11:** Allure attachments and `environment.properties`; worker/batch
-  metadata; run context, wall/scenario time and speedup; failure-first/opened
-  scenarios, summary/copy control, log references, outline groups and URL filters;
-  diagnostics E2E tests and documentation.
-- [ ] **Integration:** review and commit/integrate HU-9, HU-15 and HU-16 when
-  requested, preserving all current working-tree changes.
+- [x] **HU-11:** done on `feature/us-11-report-v3` (Allure attachments, environment
+  metadata, run context, failures-first, outline groups and URL filters); uncommitted.
+- [ ] **Integration:** commit and merge HU-11 into `develop` when requested.
 - [ ] **GitHub:** approved public repository/remote creation and push; real CI
   matrix, second-run cache, forced-failure artifact and security-scan verification.
 - [ ] **Repository/PyPI setup:** approved branch/environment settings and trusted

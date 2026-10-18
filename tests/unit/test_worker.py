@@ -23,7 +23,7 @@ def project(make_project):
     return project
 
 
-def write_plan(project, locations, behave_args=(), allure_dir=None):
+def write_plan(project, locations, behave_args=(), allure_dir=None, environment=None):
     locations_file = project.root / "tmp" / "batch-1.locations"
     locations_file.parent.mkdir(exist_ok=True)
     locations_file.write_text("\n".join(locations) + "\n", encoding="utf-8")
@@ -35,6 +35,7 @@ def write_plan(project, locations, behave_args=(), allure_dir=None):
                 "behave_args": list(behave_args),
                 "cucumber_out": str(project.root / "tmp" / "batch-1.json"),
                 "allure_dir": str(allure_dir) if allure_dir else None,
+                **({"environment": environment} if environment else {}),
             }
         ),
         encoding="utf-8",
@@ -163,3 +164,19 @@ def test_importing_worker_does_not_start_a_run_or_parse_arguments(project):
     assert result.returncode == 0, result.stderr
     assert result.stdout == result.stderr == ""
     assert set(project.root.iterdir()) == before
+
+
+def test_environment_properties_are_written_next_to_the_allure_results(project):
+    f = project.root / "features" / "a.feature"
+    allure_dir = project.root / "tmp" / "allure-batch-1"
+    environment = {"mode": "parallel", "workers": "3", "python": "3.14.0"}
+    run_worker(project, write_plan(project, [f"{f}:7"], allure_dir=allure_dir, environment=environment))
+    lines = (allure_dir / "environment.properties").read_text(encoding="utf-8").splitlines()
+    assert lines == ["mode=parallel", "workers=3", "python=3.14.0"]
+
+
+def test_no_environment_properties_without_environment_data(project):
+    f = project.root / "features" / "a.feature"
+    allure_dir = project.root / "tmp" / "allure-batch-1"
+    run_worker(project, write_plan(project, [f"{f}:7"], allure_dir=allure_dir))
+    assert not (allure_dir / "environment.properties").exists()

@@ -175,7 +175,7 @@ file uses `report_path` independently (default `<project-root>/report.html`):
 | Path | Format |
 |---|---|
 | `cucumber.json` | Standard Cucumber JSON, scenarios in line order, each preceded by its background. |
-| `allure-results/` | One Allure result per scenario that behave selected, including scenarios inside a `Rule`. Open it with the Allure CLI: `npx allure@3 generate reports/allure-results`. |
+| `allure-results/` | One Allure result per scenario that behave selected, including scenarios inside a `Rule`, with `context.attach(...)` data as attachments of their step and an `environment.properties` file. Open it with the Allure CLI: `npx allure@3 generate reports/allure-results`. |
 | `report_path` | Self-contained HTML with inline filters, no external requests, light and dark mode; project name in title and heading. |
 | `logs/batch-<n>.log` | Output of each behave process. |
 
@@ -185,10 +185,36 @@ At the start of a run behave-hive deletes only what it manages (`cucumber.json`,
 
 Scenario and feature ids are stable: they do not depend on `workers`, `chunk` or input order. Hook failures and failed `context.add_cleanup` functions count as `failed` (`broken` in Allure). A `pending` step counts as `pending`, except inside a `@wip` scenario.
 
+### Allure attachments and environment
+
+Data attached with `context.attach(mime_type, data)` (for example a screenshot in
+`after_step`) is stored in `allure-results/` and attached to the step that made it;
+data attached after the last step goes to the last step, and data attached before any
+step is ignored. `environment.properties` lists `behave-hive`, `behave` and `python`
+versions, `mode` (`parallel` or `sequential`), `workers` and `scheme`.
+
+### The HTML report
+
+- **Failures first:** inside each feature, failed, undefined and pending scenarios come
+  first and are open; each shows the first line of its error (the last line when the
+  first one is only a prefix such as `ASSERT FAILED:`) and a **Copy error** button.
+- **Run context:** start time, mode, workers, scheme, versions, the command without your
+  home or project path, the wall-clock time, the sum of scenario times and, in parallel
+  mode, the speedup between them.
+- **Worker and batch:** each scenario names its worker, its batch and `logs/batch-<n>.log`.
+- **Outline groups:** the rows of a Scenario Outline are grouped under the outline, with
+  the row count and the number of rows that did not pass.
+- **Shareable filters:** the search text, status and tag filters are kept in the address
+  as `#search=...&status=...&tag=...`, for example `report.html#status=failed&tag=@smoke`.
+  Unknown values are ignored.
+
+### Privacy and security of the HTML
+
 The HTML carries a default-deny Content-Security-Policy with the hash of its exact
-inline script, inline styles and `data:` images. Error-message path rewriting is
-described under [Limitations](#limitations). Allure screenshot attachments and
-`environment.properties` are planned diagnostics work, not currently delivered.
+inline script, inline styles and `data:` images. Paths in error messages and in the
+command are rewritten as described under [Limitations](#limitations): the run directory
+becomes the original path, the project directory becomes relative and your home becomes
+`~`. Screenshots and error texts are reported as they are.
 
 `CucumberJSONFormatter` also works without behave-hive:
 

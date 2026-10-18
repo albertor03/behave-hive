@@ -656,3 +656,23 @@ def test_embeddings_from_after_scenario_go_to_the_last_step(project):
     (scenario,) = scenarios(run_json(project))
     assert "embeddings" not in scenario["steps"][0]
     assert base64.b64decode(scenario["steps"][1]["embeddings"][0]["data"]) == b"late"
+
+
+def test_worker_batch_are_recorded_from_the_environment(project, monkeypatch):
+    monkeypatch.setenv("BEHAVE_HIVE_WORKER", "1")
+    monkeypatch.setenv("BEHAVE_HIVE_BATCH", "2")
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
+    (scenario,) = scenarios(run_json(project))
+    assert (internal(scenario)["worker"], internal(scenario)["batch"]) == (1, 2)
+
+
+@pytest.mark.parametrize("worker, batch", [(None, None), ("x", "")])
+def test_worker_batch_are_absent_when_unset_or_not_numbers(project, monkeypatch, worker, batch):
+    for name, value in (("BEHAVE_HIVE_WORKER", worker), ("BEHAVE_HIVE_BATCH", batch)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
+    (scenario,) = scenarios(run_json(project))
+    assert "worker" not in internal(scenario) and "batch" not in internal(scenario)

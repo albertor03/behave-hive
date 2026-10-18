@@ -1,4 +1,6 @@
 import json
+import platform
+import re
 import subprocess
 import sys
 import time
@@ -499,3 +501,54 @@ def test_run_keeps_a_report_path_file_that_behave_hive_did_not_generate(project)
     result = hive(project, "run", "--", "--tags=@nonexistent")
     assert result.returncode == 0, result.stdout + result.stderr
     assert (project.root / "report.html").read_text() == "<html>precious</html>"
+
+
+def read_properties(path):
+    return dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines())
+
+
+def test_allure_environment_lists_versions_mode_workers_and_scheme(project):
+    csv_project(project)
+    result = hive(project, "run", "--parallel", "-w", "3", "--formats", "allure,cucumber")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    props = read_properties(project.root / "reports" / "allure-results" / "environment.properties")
+    assert props["mode"] == "parallel"
+    assert props["workers"] == "3"
+    assert props["scheme"] == "scenario"
+    assert props["behave-hive"] == hive(project, "--version").stdout.split()[1]
+    assert props["python"] == platform.python_version()
+    assert re.fullmatch(r"\d+\.\d+(\.\d+)?", props["behave"])
+
+
+def test_allure_environment_in_sequential_mode_has_one_worker(project):
+    csv_project(project)
+    assert hive(project, "run", "--formats", "allure,cucumber").returncode == 0
+    props = read_properties(project.root / "reports" / "allure-results" / "environment.properties")
+    assert (props["mode"], props["workers"]) == ("sequential", "1")
+
+
+def test_html_report_shows_the_run_context(project):
+    csv_project(project)
+    result = hive(project, "run", "--parallel", "-w", "3", "--formats", "html")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    page = (project.root / "report.html").read_text(encoding="utf-8")
+    section = re.search(r'<section class="run">(.*?)</section>', page, re.S).group(1)
+    context = dict(re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", section))
+    assert context["Mode"] == "parallel, 3 workers, scheme scenario"
+    assert context["Command"] == "behave-hive run --parallel -w 3 --formats html"
+    assert re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", context["Started"])
+    assert context["Versions"].endswith(f"Python {platform.python_version()}")
+    assert "Speedup" in context
+
+
+def test_html_report_command_does_not_leak_the_home_directory(project, monkeypatch):
+    csv_project(project)
+    monkeypatch.setenv("HOME", str(project.root))
+    result = hive(project, "run", "--formats", "html", "--results-dir", str(project.root / "out"))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    page = (project.root / "report.html").read_text(encoding="utf-8")
+    assert str(project.root) not in page
+    assert "--results-dir out" in page

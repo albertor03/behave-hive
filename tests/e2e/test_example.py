@@ -1,6 +1,7 @@
 """Runs example/ with Playwright through the real CLI (needs chromium)."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -96,3 +97,24 @@ def test_keep_preserves_reports_when_a_test_fails(tmp_path, monkeypatch):
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert (keep / "test_forced_failure/report.html").read_text() == "failure evidence"
+
+
+def test_diagnostics_failed_row_has_screenshot_attachment_summary_and_run_context(example):
+    result = hive(example, "--parallel", "--", "--tags=@expected_fail")
+    assert result.returncode == 1, result.stdout + result.stderr
+    reports = example / "reports"
+
+    results = [json.loads(p.read_text(encoding="utf-8")) for p in (reports / "allure-results").glob("*-result.json")]
+    (failed,) = results
+    attached = [a for step in failed["steps"] for a in step.get("attachments", [])]
+    assert [a["type"] for a in attached] == ["image/png"]
+    assert (reports / "allure-results" / attached[0]["source"]).read_bytes().startswith(b"\x89PNG")
+    properties = (reports / "allure-results" / "environment.properties").read_text(encoding="utf-8")
+    assert "mode=parallel" in properties and "workers=3" in properties
+
+    page = (reports / "report.html").read_text(encoding="utf-8")
+    assert 'class="error-line"' in page and "data:image/png;base64," in page
+    assert re.search(r"worker \d+ · batch \d+ · <span class=\"muted\">logs/batch-\d+\.log", page)
+    context = dict(re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", page))
+    assert context["Mode"] == "parallel, 3 workers, scheme scenario"
+    assert str(example) not in page and str(Path.home()) not in page

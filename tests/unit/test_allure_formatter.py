@@ -248,3 +248,68 @@ def test_scrub_status_details_in_steps_scenarios_and_hook_containers(project, ki
         assert str(project.root) not in text
     if kind == "hook":
         assert "~/secret.txt" in json.dumps(result)
+
+
+AFTER_STEP_SCREENSHOT = (
+    "def after_step(context, step):\n"
+    "    if step.status == 'failed':\n"
+    "        context.attach('image/png', b'\\x89PNG\\r\\n\\x1a\\nfake')\n"
+)
+
+
+def find_attachments(steps):
+    return [(step["name"], a) for step in steps for a in step.get("attachments", [])]
+
+
+def test_attachment_from_after_step_of_a_failed_step_lands_on_that_step(project):
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n    And value "bad"\n')
+    project.write("features/environment.py", AFTER_STEP_SCREENSHOT)
+
+    (result,) = run_allure(project)
+
+    attached = find_attachments(result["steps"])
+    assert [(name, a["type"]) for name, a in attached] == [('And value "bad"', "image/png")]
+    assert (project.root / "allure" / attached[0][1]["source"]).read_bytes() == b"\x89PNG\r\n\x1a\nfake"
+
+
+def test_attachment_made_after_the_last_step_goes_to_the_last_step(project):
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n    And value "ok"\n')
+    project.write(
+        "features/environment.py",
+        "def after_scenario(context, scenario):\n    context.attach('text/plain', b'late')\n",
+    )
+
+    (result,) = run_allure(project)
+
+    attached = find_attachments(result["steps"])
+    assert [(name, a["type"]) for name, a in attached] == [('And value "ok"', "text/plain")]
+
+
+def test_attachment_before_any_step_is_ignored_and_unknown_types_get_a_generic_extension(project):
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
+    project.write(
+        "features/environment.py",
+        "def before_scenario(context, scenario):\n    context.attach('text/plain', b'early')\n"
+        "def after_scenario(context, scenario):\n    context.attach('application/x-custom', 'text data')\n",
+    )
+
+    (result,) = run_allure(project)
+
+    ((_, attachment),) = find_attachments(result["steps"])
+    assert attachment["type"] == "application/x-custom"
+    assert attachment["source"].endswith("-attachment.attach")
+    assert (project.root / "allure" / attachment["source"]).read_bytes() == b"text data"
+    assert len(list((project.root / "allure").glob("*-attachment.*"))) == 1
+
+
+def test_attachment_outside_any_scenario_is_ignored(project):
+    project.write("features/a.feature", 'Feature: F\n  Scenario: s\n    Given value "ok"\n')
+    project.write(
+        "features/environment.py",
+        "def before_all(context):\n    context.attach('text/plain', b'global')\n",
+    )
+
+    (result,) = run_allure(project)
+
+    assert find_attachments(result["steps"]) == []
+    assert list((project.root / "allure").glob("*-attachment.*")) == []

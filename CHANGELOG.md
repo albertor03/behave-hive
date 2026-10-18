@@ -20,6 +20,12 @@ verification are tracked in [STATUS.md](STATUS.md). No version is published yet.
   with Trusted Publishing configuration and an approval-gated setup script.
   Remote execution, settings application and publication remain pending.
 
+- Allure attachments from `context.attach` on the step that made them and an
+  `environment.properties` file with versions, mode, workers and scheme.
+- HTML report diagnostics: failed scenarios first and open with an error headline and
+  copy button, run context with wall time, scenario time and speedup, worker and batch
+  per scenario, Scenario Outline groups and filter state in the URL fragment.
+
 ### Changed
 
 - **Breaking:** the default HTML destination is now `<project-root>/report.html`.
