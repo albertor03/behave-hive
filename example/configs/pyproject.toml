@@ -1,0 +1,10 @@
+# The same settings in TOML; behave-hive also reads this table from a project's pyproject.toml.
+#   behave-hive run --config configs/pyproject.toml
+[tool.behave_hive]
+parallel = true
+workers = 3
+scheme = "scenario"
+results_dir = "reports"
+report_name = "Example report"
+report_path = "reports/report.html"
+formats = ["allure", "cucumber", "html"]

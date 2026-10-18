@@ -21,3 +21,28 @@ def step_sign_in(context, user, password):
 @then('I see the message "{message}"')
 def step_message(context, message):
     assert context.page.inner_text("#msg") == message
+
+
+@then('the text "{text}" has {length:d} characters')
+def step_text_length(context, text, length):
+    assert len(text) == length, f"{text!r} has {len(text)} characters, not {length}"
+
+
+@given("these users exist")
+def step_users(context):
+    context.users = {row["user"]: row["role"] for row in context.table}
+
+
+@then('the user "{user}" has the role "{role}"')
+def step_user_role(context, user, role):
+    assert context.users[user] == role
+
+
+@given("this note")
+def step_note(context):
+    context.note = context.text
+
+
+@then("the note has {count:d} lines")
+def step_note_lines(context, count):
+    assert len(context.note.splitlines()) == count

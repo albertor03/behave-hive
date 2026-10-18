@@ -5,12 +5,20 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.ruff_cache/
+
+# Local tool output (coverage data and reports, scratch files): nothing of it goes in the project root
+.artifacts/
 
 # behave-hive runtime output
 .behave-hive/
 reports/
+e2e-reports/
+playwright-report/
+/report.html
 
 # Local-only planning and agent tooling (not versioned, see AGENTS.md)
 openspec/
 .claude/
 CLAUDE.md
+STATUS.md

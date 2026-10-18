@@ -5,22 +5,50 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "behave-hive"
 version = "0.1.0"
-description = "behave layer with Karate-style CSV Examples, parallel execution and Allure/Cucumber JSON/HTML reports"
+description = "Run behave scenarios in parallel with Examples read from CSV files, and get Allure, Cucumber JSON and HTML reports"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Alberto Zapata" }]
+keywords = ["behave", "bdd", "csv", "parallel", "allure", "cucumber"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Testing :: BDD",
+]
 dependencies = ["behave>=1.3,<1.4"]
 
 [project.optional-dependencies]
 allure = ["allure-behave==2.16.2"]
 playwright = ["playwright>=1.40"]
-dev = ["pytest>=8", "jsonschema>=4", "build>=1"]
+dev = [
+    "pytest>=8", "jsonschema>=4", "build>=1",
+    "ruff", "pylint", "pytest-cov>=7", "coverage>=7.10", "pip-audit",
+]
+
+[project.urls]
+Homepage = "https://github.com/albertor03/behave-hive"
+Issues = "https://github.com/albertor03/behave-hive/issues"
 
 [project.scripts]
 behave-hive = "behave_hive.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+behave_hive = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -29,3 +57,49 @@ markers = [
     "e2e: runs example/ with Playwright (slow, requires chromium)",
     "packaging: builds and installs the wheel in clean venvs (slow)",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "SIM", "UP", "C90", "S", "RUF"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Tests intentionally assert results and launch controlled subprocess commands.
+"tests/**" = ["S101", "S603", "S607"]
+# Release validation invokes only git with fixed options and a fully validated tag.
+".github/scripts/check_release.py" = ["S603", "S607"]
+
+[tool.pylint.main]
+disable = ["all"]
+enable = ["duplicate-code"]
+
+[tool.pylint.similarities]
+# Pylint uses an exclusive threshold: five rejects six matching non-signature lines.
+min-similarity-lines = 5
+
+[tool.coverage.run]
+branch = true
+source = ["behave_hive"]
+parallel = true
+patch = ["subprocess"]
+sigterm = true
+data_file = ".artifacts/.coverage"
+
+[tool.coverage.json]
+output = ".artifacts/coverage.json"
+
+[tool.coverage.xml]
+output = ".artifacts/coverage.xml"
+
+[tool.coverage.html]
+directory = ".artifacts/htmlcov"
+
+[tool.coverage.report]
+fail_under = 100
+precision = 2
+show_missing = true

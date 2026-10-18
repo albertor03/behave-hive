@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    ignore:
+      # The formatter uses allure-behave's internal API; only patches are safe proposals.
+      - dependency-name: "allure-behave"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    groups:
+      actions:
+        patterns: ["*"]

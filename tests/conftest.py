@@ -18,12 +18,12 @@ import pytest
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
-STEPS = '''
+STEPS = f'''
 import os, time
 from pathlib import Path
 from behave import given
 
-PNG_BYTES = {png!r}
+PNG_BYTES = {PNG_BYTES!r}
 
 
 @given('value "{{v}}"')
@@ -46,7 +46,7 @@ def step_pid(context):
     d = Path(os.getcwd()) / "pids"
     d.mkdir(exist_ok=True)
     (d / str(os.getpid())).write_text(str(os.getpid()))
-'''.format(png=PNG_BYTES)
+'''
 
 
 class Project:
@@ -89,3 +89,9 @@ def make_project(tmp_path, monkeypatch):
 def cucumber_schema():
     import json
     return json.loads((Path(__file__).parent / "schemas" / "cucumber.schema.json").read_text())
+
+
+@pytest.fixture
+def project(make_project):
+    """A fresh behave project; modules needing seeded files override this fixture."""
+    return make_project()
