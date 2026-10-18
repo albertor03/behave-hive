@@ -4,16 +4,20 @@ import re
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from behave_hive import cli
 
+PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
+
 
 def test_version_prints_name_and_version(capsys):
+    version = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]["version"]
     assert cli.main(["--version"]) == 0
-    assert capsys.readouterr().out.strip() == "behave-hive 0.1.0"
+    assert capsys.readouterr().out.strip() == f"behave-hive {version}"
 
 
 def test_split_argv_at_the_first_double_dash():

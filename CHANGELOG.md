@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-18
+
+### Fixed
+
+- The README uses absolute URLs for its images and links, so the PyPI project page shows the screenshots and the links work. A unit test rejects relative targets.
+
 ## [0.1.0] - 2026-10-18
 
 First release.
