@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from behave_hive import cli, expand
 from behave_hive.errors import HiveError
 from behave_hive.expand import EXPANDED_MARKER, expand_tree
 
@@ -105,3 +106,58 @@ def test_tree_rejects_non_empty_destination_without_marker_without_deleting(src,
     with pytest.raises(HiveError):
         expand_tree(src, dst, "en")
     assert (dst / "precious.txt").read_text() == "keep"
+
+
+def test_tree_rejects_regular_file_destination_without_deleting(src, tmp_path):
+    dst = tmp_path / "precious.txt"
+    dst.write_text("keep")
+    with pytest.raises(HiveError, match="expansion destination is not a directory"):
+        expand_tree(src, dst, "en")
+    assert dst.read_text() == "keep"
+    assert (src / "a.feature").read_bytes().decode() == FEATURE
+
+
+@pytest.mark.parametrize("replacement", ["symlink", "missing-marker"])
+def test_swapped_destination_after_validation_is_rejected_without_deleting(src, tmp_path, monkeypatch, replacement):
+    dst, victim = tmp_path / "out", tmp_path / "victim"
+    dst.mkdir()
+    victim.mkdir()
+    (victim / "precious.txt").write_text("keep")
+    (dst / EXPANDED_MARKER).write_text("")
+    validate = expand._validate_destination
+    calls = []
+
+    def swap(source, target):
+        validate(source, target)
+        calls.append(target)
+        if len(calls) == 1:
+            (dst / EXPANDED_MARKER).unlink()
+            if replacement == "symlink":
+                dst.rmdir()
+                dst.symlink_to(victim)
+            else:
+                (dst / "precious.txt").write_text("keep")
+
+    monkeypatch.setattr(expand, "_validate_destination", swap)
+    assert cli.main(["expand", str(src), str(dst)]) == 2
+    assert (victim / "precious.txt").read_text() == "keep"
+    assert (dst / "precious.txt").read_text() == "keep"
+    assert (src / "a.feature").read_bytes().decode() == FEATURE
+
+
+def test_swapped_destination_before_marker_creation_is_rejected(src, tmp_path, monkeypatch):
+    dst, victim = tmp_path / "out", tmp_path / "victim"
+    victim.mkdir()
+    (victim / "precious.txt").write_text("keep")
+    mkdir = type(dst).mkdir
+
+    def swap(path, *args, **kwargs):
+        mkdir(path, *args, **kwargs)
+        if path == dst:
+            path.rmdir()
+            path.symlink_to(victim)
+
+    monkeypatch.setattr(type(dst), "mkdir", swap)
+    assert cli.main(["expand", str(src), str(dst)]) == 2
+    assert (victim / "precious.txt").read_text() == "keep"
+    assert not (victim / EXPANDED_MARKER).exists()

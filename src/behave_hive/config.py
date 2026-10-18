@@ -57,6 +57,8 @@ class HiveConfig:
     behave_args: tuple[str, ...]
     paths: tuple[str, ...]
     config_file: Path | None
+    report_name: str | None = None
+    report_path: Path | None = None
 
 
 def _to_bool(key: str, value: Any) -> bool:
@@ -120,6 +122,8 @@ CONVERTERS = {
     "work_dir": _to_path,
     "behave_args": _to_args,
     "paths": _to_list,
+    "report_name": _to_str,
+    "report_path": _to_path,
 }
 
 
@@ -134,6 +138,8 @@ def _defaults() -> dict[str, Any]:
         "work_dir": Path(".behave-hive"),
         "behave_args": (),
         "paths": ("features",),
+        "report_name": None,
+        "report_path": None,
     }
 
 
@@ -185,6 +191,11 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
         values[key] = CONVERTERS[key](key, raw) if isinstance(raw, str) else raw
     values["behave_args"] = (*values["behave_args"], *extra_args)
     _validate(values)
+    root = found.resolve().parent if found is not None else Path.cwd()
+    report_name = values["report_name"] or _project_name(root)
+    report_path = (root / (values["report_path"] or "report.html")).resolve()
+    if report_path.is_dir():
+        raise ConfigError(f"invalid report_path: {report_path} is a directory (use an HTML filename)")
     return HiveConfig(
         parallel=values["parallel"],
         workers=values["workers"],
@@ -196,7 +207,23 @@ def load_config(cli: dict[str, Any], config_path: Path | None, extra_args: list[
         behave_args=tuple(values["behave_args"]),
         paths=tuple(values["paths"]),
         config_file=found,
+        report_name=report_name,
+        report_path=report_path,
     )
+
+
+def _project_name(root: Path) -> str:
+    metadata = root / PYPROJECT
+    if metadata.is_file():
+        try:
+            data = tomllib.loads(metadata.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            raise ConfigError(f"cannot read project name from {metadata}: {exc}") from None
+        project = data.get("project")
+        name = project.get("name") if isinstance(project, dict) else None
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return root.name or "behave-hive"
 
 
 def _options_taking_a_value() -> set[str]:

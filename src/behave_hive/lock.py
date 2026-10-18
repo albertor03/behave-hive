@@ -18,8 +18,9 @@ def results_lock(results_dir: Path) -> Iterator[None]:
     """Hold the lock of `results_dir` for the duration of the block."""
     results_dir = Path(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
-    fd = os.open(results_dir / LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o644)
+    fd = os.open(results_dir / LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
+        os.fchmod(fd, 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:

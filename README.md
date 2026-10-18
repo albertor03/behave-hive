@@ -8,7 +8,14 @@ A layer on top of [behave](https://github.com/behave/behave) 1.3.x that adds:
 
 Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without CSV cells runs exactly as it does with behave.
 
+See [Project status and pending work](STATUS.md) for the verified local snapshot,
+story progress, integration state and remaining reviews/publication steps.
+
 ## Installation
+
+The current `0.1.0` checkout is not published yet. Install it from source with
+`pip install -e ".[allure,playwright]"` (or `.[dev,allure,playwright]` for development).
+The package-index commands below apply after publication.
 
 ```bash
 pip install behave-hive                 # or: uv pip install behave-hive
@@ -16,7 +23,7 @@ pip install "behave-hive[allure]"       # adds allure-behave 2.16.2 for the Allu
 pip install "behave-hive[playwright]"   # only needed to run the example
 ```
 
-Requires Python 3.11 or newer. macOS and Linux are supported; Windows is not tested.
+Requires Python 3.11 or newer. macOS and Linux are supported; Windows is not supported.
 
 ## Examples from CSV
 
@@ -90,7 +97,7 @@ Every path belongs to a **features root**: the closest directory, walking up, th
 | `-w`, `--workers N` | Number of processes. |
 | `--scheme scenario\|feature` | Distribute scenarios (and outline rows) or whole features. |
 | `--chunk N` | Units per process; `0` splits the units of a root evenly among the workers. |
-| `--results-dir DIR` | Where reports go. |
+| `--results-dir DIR` | Where JSON, Allure results and logs go; HTML uses `report_path`. |
 | `--formats LIST` | Any of `allure`, `cucumber`, `html`. |
 | `--config FILE` | Read `[behave_hive]` from this file only. |
 | `--keep-tmp` | Keep `results_dir/tmp/` (partial results, locations files). |
@@ -110,6 +117,8 @@ parallel = true
 workers = 3
 scheme = scenario
 formats = allure, cucumber, html
+report_name = My QA project
+report_path = reports/report.html
 ```
 
 | Key | Default | Notes |
@@ -119,12 +128,21 @@ formats = allure, cucumber, html
 | `scheme` | `scenario` | `scenario` or `feature`. |
 | `chunk` | `0` | At least 0. |
 | `results_dir` | `reports` | |
+| `report_name` | project name | HTML title and heading only; blank also uses the fallback. |
+| `report_path` | `<project-root>/report.html` | Full HTML filename; relative to the project root, or absolute. Parents are created. |
 | `formats` | `cucumber, html` | Comma or space separated; TOML arrays work too. |
 | `work_dir` | `.behave-hive` | Each run uses its own subdirectory. |
 | `behave_args` | empty | Shell-style string (`--tags="@a and not @b" -D env=qa`) or a TOML array. `%` is literal. |
 | `paths` | `features` | What to run when no path is given. |
 
 Precedence, lowest to highest: default, file, command line. Arguments after `--` are appended after `behave_args`. An unknown key is an error. behave's own settings (`default_tags`, `tags`, `lang`, ...) keep their meaning; `--tags` on the command line overrides `default_tags`, as in behave.
+
+The project root is the selected configuration file's directory, or the working
+directory when no configuration section is selected. An omitted/blank HTML name
+uses `[project].name` from that root's `pyproject.toml`, then the folder name.
+HTML is now written at the project root by default. Set
+`report_path = reports/report.html` to retain the earlier destination.
+These settings do not change the generated Allure report's name.
 
 ### Arguments behave-hive controls
 
@@ -151,18 +169,24 @@ behave runs scenarios tagged `@setup` or `@teardown` even when they are not sele
 
 ## Reports
 
-Everything is written to `results_dir` (default `reports/`):
+JSON, Allure and logs are written to `results_dir` (default `reports/`). The HTML
+file uses `report_path` independently (default `<project-root>/report.html`):
 
 | Path | Format |
 |---|---|
 | `cucumber.json` | Standard Cucumber JSON, scenarios in line order, each preceded by its background. |
 | `allure-results/` | One Allure result per scenario that behave selected, including scenarios inside a `Rule`. Open it with the Allure CLI: `npx allure@3 generate reports/allure-results`. |
-| `report.html` | Self-contained page: no JavaScript, no external requests, light and dark mode. |
+| `report_path` | Self-contained HTML with inline filters, no external requests, light and dark mode; project name in title and heading. |
 | `logs/batch-<n>.log` | Output of each behave process. |
 
 At the start of a run behave-hive deletes only what it manages (`cucumber.json`, `report.html`, `allure-results/`, `logs/`, `tmp/`); anything else in `results_dir` is kept. A second run on the same `results_dir` exits with code 2.
 
 Scenario and feature ids are stable: they do not depend on `workers`, `chunk` or input order. Hook failures and failed `context.add_cleanup` functions count as `failed` (`broken` in Allure). A `pending` step counts as `pending`, except inside a `@wip` scenario.
+
+The HTML carries a default-deny Content-Security-Policy with the hash of its exact
+inline script, inline styles and `data:` images. Error-message path rewriting is
+described under [Limitations](#limitations). Allure screenshot attachments and
+`environment.properties` are planned diagnostics work, not currently delivered.
 
 `CucumberJSONFormatter` also works without behave-hive:
 
@@ -202,6 +226,19 @@ The time goes into starting Python, behave and Chromium once per process and int
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
 - **POSIX only:** the runner uses symlinks and process groups; Windows is not supported.
 - **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV.
+- **CSV access is not sandboxed:** a feature may reference any CSV readable by the
+  current user, including paths with `..`; its rows can appear in reports.
+- **Retained run configuration:** `--keep-tmp` preserves private plans and
+  locations, including `-D key=value` arguments. These files are owner-only
+  (`0600`, inside a `0700` temporary directory); remove retained runs when no
+  longer needed. The results lock is also owner-only.
+- **Report privacy:** behave-hive rewrites expanded roots, the working directory
+  and the home prefix in error messages to original relative paths or `~`.
+  The directly used Cucumber formatter (`behave -f`) has no run path map and
+  does not perform this rewriting. Screenshots and attached data are not scrubbed
+  and may contain sensitive application data; scenario inputs can also appear.
+- **Expansion race window:** destination checks are repeated before deletion
+  and marker creation. This narrows, but does not eliminate, filesystem races.
 
 ## Contributing
 
@@ -211,15 +248,24 @@ on a feature branch from `develop`; keep versioned content in English.
 ```bash
 ruff check src tests
 pylint src
-pytest -m "not e2e and not packaging" --cov --cov-report=term-missing
+pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=json:coverage.json
 pip-audit --local --skip-editable
 ```
 
-Ruff checks lint, security rules and McCabe complexity (maximum 10). The four
-baseline complexity findings are temporarily excluded in `pyproject.toml` until
-the planned refactor. Pylint rejects duplicated blocks of six matching lines in
-source; `pylint tests` is informational. Coverage includes subprocesses and
-branches and must reach 90%. Tools are declared in the `dev` extra.
+Ruff checks lint, security rules and McCabe complexity (maximum 10). Temporary
+module-level C901 exceptions in `pyproject.toml` remain until HU-10 removes the
+complexity debt; the historical baseline had four findings. Pylint rejects duplicated blocks of six matching lines in
+source; `pylint tests` is informational. Tools are declared in the `dev` extra.
+
+Coverage requires **100% statements and 100% branches** across the entire
+`src/behave_hive` library, including future modules and worker/CLI subprocesses.
+Scripts, tests, examples and dependencies are outside this gate. Do not narrow
+the source list or add exclusions to hide untested library code. `coverage.json`
+reports statement counts (`covered_lines`/`num_statements`, `missing_lines`) and
+branch counts (`covered_branches`/`num_branches`, `missing_branches`) separately:
+both missing counts must be exactly zero. The terminal's combined percentage is
+not the branch percentage; rounded percentages alone are not proof of completion.
+CI also rejects excluded library lines and prints both exact counter sets.
 
 ### CI jobs and artifacts
 
@@ -231,14 +277,15 @@ The CI workflow runs on pushes and pull requests to `main` and `develop`:
 | `e2e` | Chromium example and HTML report interactions |
 | `packaging` | Build and install the wheel with pip and uv |
 | `quality` | Ruff, pylint duplicate-code, pip-audit |
-| `coverage` | Unit suite with subprocess branch coverage >= 90% |
+| `coverage` | Unit suite: exactly 100% library statements and branches, including subprocesses |
 | `actionlint` | Validate all workflow files and expressions |
 
 Runs have timeouts and superseded CI runs are cancelled. Action references use
 release commit SHAs; pip and Playwright downloads are cached. On a failed run,
 open the run's **Artifacts** section: `e2e-reports` contains the example's HTML,
 Cucumber JSON and Allure results by test name; `coverage` contains `.coverage`,
-`coverage.xml` and `coverage.txt`. Both are retained for seven days, including on
+`coverage.xml`, `coverage.txt` and `coverage.json` with missing statement/branch
+locations. Both artifacts are retained for seven days, including on
 failure. To preserve example reports locally, set
 `BEHAVE_HIVE_E2E_KEEP=/absolute/path/to/evidence` before running e2e tests.
 Artifacts retain report contents, including inputs, tracebacks and screenshots.

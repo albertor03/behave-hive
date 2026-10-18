@@ -250,8 +250,10 @@ def expand_tree(src_root: Path, dst: Path, lang: str) -> TreeResult:
     _validate_destination(src, dst)
     dst_resolved = dst.resolve()
     if dst_resolved.exists():
+        _validate_destination(src, dst)
         shutil.rmtree(dst_resolved)
     dst_resolved.mkdir(parents=True)
+    _validate_destination(src, dst)
     (dst_resolved / EXPANDED_MARKER).write_text("", encoding="utf-8")
 
     sources_by_file: dict[Path, list[RowSource]] = {}

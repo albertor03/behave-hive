@@ -39,6 +39,8 @@ def test_defaults_without_any_file(project):
         behave_args=(),
         paths=("features",),
         config_file=None,
+        report_name=project.name,
+        report_path=project / "report.html",
     )
 
 
@@ -310,6 +312,36 @@ def test_validation_toml_wrong_types(project):
         load()
 
 
+@pytest.mark.parametrize(
+    "key, value, diagnostic",
+    [
+        ("parallel", "2", "not a boolean"),
+        ("formats", "7", "not a list"),
+        ("paths", '["features", 7]', "not a list"),
+        ("behave_args", "7", "not a list of arguments"),
+        ("behave_args", '["--tags", 7]', "not a list of arguments"),
+        ("behave_args", "'--tags=\"unfinished'", "No closing quotation"),
+    ],
+)
+def test_validation_rejects_mistyped_toml_and_malformed_arguments(project, key, value, diagnostic):
+    (project / "pyproject.toml").write_text(f"[tool.behave_hive]\n{key} = {value}\n")
+    with pytest.raises(ConfigError) as exc:
+        load()
+    assert key in str(exc.value)
+    assert diagnostic in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "filename, text",
+    [("broken.toml", "[tool.behave_hive\n"), ("broken.ini", "[behave_hive\n")],
+)
+def test_malformed_config_reports_parse_error_and_filename(project, filename, text):
+    path = project / filename
+    path.write_text(text)
+    with pytest.raises(ConfigError, match=f"cannot parse {path}"):
+        load(config_path=path)
+
+
 def test_validation_cli_values_are_validated_too(project):
     with pytest.raises(ConfigError, match="workers"):
         load(cli={"workers": 0})
@@ -445,3 +477,79 @@ def test_behave_ignores_hive_section(make_project):
     result = project.run("behave", "features")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "warning" not in result.stderr.lower()
+
+
+def test_report_name_and_path_can_be_set_in_ini(project):
+    (project / "behave.ini").write_text(ini(report_name="  QA Portal  ", report_path="evidence/login.html"))
+    cfg = load()
+    assert cfg.report_name == "QA Portal"
+    assert cfg.report_path == project / "evidence/login.html"
+    assert cfg.results_dir == Path("reports")
+
+
+@pytest.mark.parametrize("name", [None, "", "  ", 7])
+def test_report_name_missing_or_unusable_metadata_falls_back_to_folder(project, name):
+    if name is not None:
+        value = f'"{name}"' if isinstance(name, str) else str(name)
+        (project / "pyproject.toml").write_text(f"[project]\nname = {value}\n")
+    cfg = load()
+    assert cfg.report_name == project.name
+    assert cfg.report_path == project / "report.html"
+
+
+def test_report_name_uses_project_metadata_when_not_configured(project):
+    (project / "pyproject.toml").write_text('[project]\nname = "portal-qa"\n')
+    assert load().report_name == "portal-qa"
+
+
+def test_report_name_blank_setting_uses_project_metadata(project):
+    (project / "behave.ini").write_text(ini(report_name="  "))
+    (project / "pyproject.toml").write_text('[project]\nname = "portal-qa"\n')
+    assert load().report_name == "portal-qa"
+
+
+def test_report_name_explicit_setting_does_not_read_unneeded_metadata(project):
+    (project / "behave.ini").write_text(ini(report_name="QA Portal"))
+    (project / "pyproject.toml").write_text("not valid TOML !")
+    assert load().report_name == "QA Portal"
+
+
+def test_report_name_malformed_metadata_is_a_config_error(project):
+    (project / "behave.ini").write_text(ini(workers="1"))
+    (project / "pyproject.toml").write_text("not valid TOML !")
+    with pytest.raises(ConfigError, match=r"pyproject\.toml"):
+        load()
+
+
+def test_report_name_and_path_in_toml(project):
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "metadata-name"\n[tool.behave_hive]\n'
+        'report_name = "Configured title"\nreport_path = "evidence/named.html"\n'
+    )
+    cfg = load()
+    assert cfg.report_name == "Configured title"
+    assert cfg.report_path == project / "evidence/named.html"
+
+
+def test_report_name_and_path_follow_the_explicit_config_root(project, monkeypatch):
+    (project / "behave.ini").write_text(ini(report_path="evidence/report.html"))
+    (project / "pyproject.toml").write_text('[project]\nname = "portal-root"\n')
+    child = project / "nested"
+    child.mkdir()
+    monkeypatch.chdir(child)
+    cfg = load(config_path=project / "behave.ini")
+    assert cfg.report_name == "portal-root"
+    assert cfg.report_path == project / "evidence/report.html"
+
+
+@pytest.mark.parametrize("key", ["report_name", "report_path"])
+def test_report_settings_reject_non_string_values(project, key):
+    (project / "pyproject.toml").write_text(f"[tool.behave_hive]\n{key} = 7\n")
+    with pytest.raises(ConfigError, match=key):
+        load()
+
+
+def test_report_path_rejects_an_existing_directory(project):
+    (project / "behave.ini").write_text(ini(report_path="."))
+    with pytest.raises(ConfigError, match="report_path"):
+        load()

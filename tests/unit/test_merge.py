@@ -72,6 +72,40 @@ def test_merge_leaves_uris_outside_the_map_untouched():
     assert report.features[0]["uri"] == "features/other.feature"
 
 
+def test_merge_preserves_absolute_originals_outside_cwd():
+    outside = Path("/shared/features")
+    mapping = PathMap({EXPANDED: outside})
+    report = merge(
+        [[feature(str(EXPANDED / "a.feature"), [scenario(3, location=f"{EXPANDED}/steps/s.py:12")])]],
+        mapping, {}, cwd=CWD,
+    )
+    (feat,) = report.features
+    assert feat["uri"] == "/shared/features/a.feature"
+    assert feat["elements"][0]["steps"][0]["match"]["location"] == "/shared/features/steps/s.py:12"
+
+
+@pytest.mark.parametrize("hook_match", [None, {}, {"arguments": []}])
+def test_merge_keeps_hooks_without_a_match_location(hook_match):
+    hook = {"result": {"status": "failed", "duration": 0, "error_message": "setup failed"}}
+    if hook_match is not None:
+        hook["match"] = hook_match
+    elem = scenario(3)
+    elem["before"] = [hook]
+    elem["after"] = [copy.deepcopy(hook)]
+    report = run([[feature(str(EXPANDED / "a.feature"), [elem])]])
+    out = report.features[0]["elements"][0]
+    assert out["before"] == [hook] and out["after"] == [hook]
+
+
+def test_merge_preserves_scenario_ids_without_the_old_feature_prefix():
+    elem = scenario(3)
+    elem["id"] = "external-scenario-id"
+    report = run([[feature(str(EXPANDED / "a.feature"), [elem])]])
+    (feat,) = report.features
+    assert feat["id"] == feature_id("features/a.feature")
+    assert feat["elements"][0]["id"] == "external-scenario-id"
+
+
 def test_merge_recomputes_feature_and_scenario_ids_over_the_original_uri():
     report = run([[feature(str(EXPANDED / "login.feature"), [scenario(3, "Login")])]])
     (feat,) = report.features
@@ -159,3 +193,17 @@ def test_to_cucumber_removes_the_internal_extension_without_touching_the_report(
     cucumber = to_cucumber(report)
     assert all("x-behave-hive" not in e for e in cucumber[0]["elements"])
     assert "x-behave-hive" in report.features[0]["elements"][1]
+
+
+def test_scrub_error_messages_in_steps_and_both_hooks(monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("/Users/tester")))
+    message = f'File "{EXPANDED}/steps/s.py"\nFile "/Users/tester/library.py"'
+    elem = scenario(3, status="failed")
+    elem["steps"][0]["result"].update(status="failed", error_message=message)
+    hook = {"result": {"status": "failed", "duration": 0, "error_message": message}}
+    elem["before"], elem["after"] = [hook], [copy.deepcopy(hook)]
+    (out,) = run([[feature(str(EXPANDED / "a.feature"), [elem])]]).features[0]["elements"]
+    expected = 'File "features/steps/s.py"\nFile "~/library.py"'
+    assert out["steps"][0]["result"]["error_message"] == expected
+    assert out["before"][0]["result"]["error_message"] == expected
+    assert out["after"][0]["result"]["error_message"] == expected

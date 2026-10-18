@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +17,27 @@ def test_version_prints_name_and_version(capsys):
 def test_split_argv_at_the_first_double_dash():
     assert cli.split_argv(["run", "-x", "--", "-t", "@a", "--", "b"]) == (["run", "-x"], ["-t", "@a", "--", "b"])
     assert cli.split_argv(["run"]) == (["run"], [])
+
+
+@pytest.mark.parametrize("argv", [[], ["unknown"]])
+def test_required_subcommand_rejects_missing_or_unknown_input(argv, capsys):
+    assert cli.main(argv) == 2
+    assert "usage: behave-hive" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv, command", [(["run"], "run"), (["expand", "features", "out"], "expand")])
+def test_parser_accepts_the_two_supported_subcommands(argv, command):
+    assert cli.build_parser().parse_args(argv).command == command
+
+
+def test_keyboard_interrupt_during_configuration_returns_130_without_traceback(monkeypatch, capsys):
+    def interrupted(*args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "load_config", interrupted)
+    assert cli.main(["run"]) == 130
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
 
 
 def make_features(tmp_path, csv=True):
@@ -110,6 +132,41 @@ def test_run_reports_inline_and_csv_example_tables_and_the_csv_files(project):
     assert "Mode: sequential" in result.stdout
 
 
+def test_examples_summary_lists_a_shared_csv_once_for_two_tables(project):
+    csv_project(project, rows=("ok",))
+    project.write("features/second.feature", CSV_FEATURE.replace("Feature: Login", "Feature: Second"))
+    result = hive(project, "run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Examples: 0 inline, 2 from CSV" in result.stdout
+    assert result.stdout.count("  - features/data/values.csv") == 1
+    assert "2 scenarios (2 passed)" in result.stdout
+
+
+@pytest.mark.parametrize("error_class", ["ConfigError", "TagExpressionError"])
+def test_behave_configuration_errors_are_user_facing_exit_2(project, error_class):
+    csv_project(project, rows=("ok",))
+    project.write(
+        "runner_error.py",
+        f'''
+        import sys
+        from behave.exception import {error_class}
+        from behave_hive import runner
+        from behave_hive.cli import main
+
+        def invalid_config(args):
+            raise {error_class}("invalid behave configuration")
+
+        runner.build_behave_config = invalid_config
+        sys.exit(main(["run"]))
+        ''',
+    )
+    result = project.run("runner_error")
+    assert result.returncode == 2
+    assert f"{error_class}: invalid behave configuration" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (project.root / "reports/logs").exists()
+
+
 def test_run_sequential_mode_uses_a_single_batch(project):
     csv_project(project)
     result = hive(project, "run")
@@ -195,7 +252,7 @@ def test_reports_all_three_formats_from_a_parallel_csv_run(project):
     assert len([e for e in data[0]["elements"] if e["type"] == "scenario"]) == 6
     assert [e["line"] for e in data[0]["elements"]] == sorted(e["line"] for e in data[0]["elements"])
     assert len(list((reports / "allure-results").glob("*-result.json"))) == 6
-    html = (reports / "report.html").read_text()
+    html = (project.root / "report.html").read_text()
     assert "features/data/values.csv:2" in html and "6 scenarios (6 passed)" in html
     assert "x-behave-hive" not in (reports / "cucumber.json").read_text()
 
@@ -380,3 +437,51 @@ def test_allure_paths_history_ids_do_not_depend_on_the_workers(project):
     assert hive(project, "run", "--parallel", "-w", "1", "--formats", "allure").returncode == 0
     assert sorted(r["historyId"] for r in allure_results(project)) == three
     assert len(set(three)) == 6
+
+
+def test_report_name_and_default_path_use_the_project_folder(project):
+    csv_project(project, rows=("ok",))
+    result = hive(project, "run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    page = (project.root / "report.html").read_text()
+    assert f"<title>{project.root.name}</title>" in page
+    assert not (project.root / "reports/report.html").exists()
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_report_name_and_custom_path_leave_other_formats_in_results_dir(project, absolute):
+    csv_project(project, rows=("ok",))
+    target = project.root / "evidence/nested/login.html"
+    setting = str(target) if absolute else "evidence/nested/login.html"
+    project.write("behave.ini", f"[behave_hive]\nreport_name = Portal QA\nreport_path = {setting}\n")
+    result = hive(project, "run", "--formats", "allure,cucumber,html")
+    assert result.returncode == 0, result.stdout + result.stderr
+    page = target.read_text()
+    assert "<title>Portal QA</title>" in page and "<h1>Portal QA</h1>" in page
+    assert (project.root / "reports/cucumber.json").is_file()
+    assert list((project.root / "reports/allure-results").glob("*-result.json"))
+    assert not (project.root / "report.html").exists()
+
+
+def test_report_path_write_error_is_a_user_facing_error(project):
+    csv_project(project, rows=("ok",))
+    project.write("blocked", "a file, not a directory")
+    project.write("behave.ini", "[behave_hive]\nreport_path = blocked/report.html\n")
+    result = hive(project, "run")
+    assert result.returncode == 2
+    assert "cannot write HTML report" in result.stderr and "Traceback" not in result.stderr
+
+
+def test_privacy_of_failing_csv_row_in_all_report_formats(project):
+    csv_project(project, rows=("bad",))
+    result = hive(project, "run", "--formats", "allure,cucumber,html")
+    assert result.returncode == 1, result.stdout + result.stderr
+    reports = [project.root / "reports/cucumber.json", project.root / "report.html"]
+    reports += list((project.root / "reports/allure-results").glob("*-result.json"))
+    assert len(reports) == 3
+    for report in reports:
+        text = report.read_text()
+        assert ".behave-hive" not in text, report
+        assert "run-" not in text, report
+        assert str(Path.home()) not in text, report
+        assert "features/steps/steps.py" in text

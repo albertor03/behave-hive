@@ -1,10 +1,7 @@
-import importlib
 import json
-import sys
+from pathlib import Path
 
 import pytest
-
-from behave_hive.errors import HiveError
 
 FORMATTER = "behave_hive.formatters.allure:AllureFormatter"
 
@@ -132,11 +129,46 @@ def test_unselected_scenarios_have_no_result(project):
     assert result["name"] == "tagged"
 
 
-def test_without_allure_behave_importing_the_formatter_raises_hive_error(monkeypatch):
-    monkeypatch.delitem(sys.modules, "behave_hive.formatters.allure", raising=False)
-    monkeypatch.setitem(sys.modules, "allure_behave", None)
-    with pytest.raises(HiveError, match=r"behave-hive\[allure\]"):
-        importlib.import_module("behave_hive.formatters.allure")
+def test_without_allure_behave_importing_the_formatter_raises_hive_error(project):
+    project.write(
+        "missing_allure.py",
+        '''
+        import sys
+        from behave_hive.errors import HiveError
+
+        sys.modules["allure_behave"] = None
+        try:
+            import behave_hive.formatters.allure
+        except HiveError as exc:
+            sys.stderr.write(str(exc))
+            sys.exit(exc.exit_code)
+        raise AssertionError("missing dependency was not rejected")
+        ''',
+    )
+    result = project.run("missing_allure")
+    assert result.returncode == 2
+    assert 'pip install "behave-hive[allure]"' in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_callbacks_without_a_selected_scenario_do_not_change_results(project):
+    project.write(
+        "features/environment.py",
+        '''
+        from behave_hive.formatters.allure import AllureFormatter
+
+        def before_all(context):
+            for formatter in context._runner.formatters:
+                if isinstance(formatter, AllureFormatter):
+                    formatter.match(None)
+                    formatter.result(None)
+        ''',
+    )
+    project.write("features/a.feature", 'Feature: F\n  Scenario: selected\n    Given value "ok"\n')
+    (result,) = run_allure(project)
+    assert result["name"] == "selected"
+    assert result["status"] == "passed"
+    assert [s["name"] for s in result["steps"]] == ['Given value "ok"']
 
 
 # --- original paths (task 5.11) -----------------------------------------------------
@@ -201,3 +233,23 @@ def test_original_paths_without_a_path_map_nothing_changes(project):
     project.write("features/a.feature", 'Feature: F\n  Scenario: S\n    Given value "ok"\n')
     (result,) = run_allure(project)
     assert result["titlePath"][-1] == "F"
+
+
+@pytest.mark.parametrize("kind", ["step", "hook", "undefined"])
+def test_scrub_status_details_in_steps_scenarios_and_hook_containers(project, kind):
+    if kind == "hook":
+        project.write(
+            "features/environment.py",
+            'from pathlib import Path\ndef after_scenario(context, scenario):\n'
+            '    raise RuntimeError(f"private file {Path.home()}/secret.txt")\n',
+        )
+    step = {"undefined": "an unknown step", "hook": 'value "ok"', "step": 'value "bad"'}[kind]
+    project.write("features/a.feature", f"Feature: F\n  Scenario: s\n    Given {step}\n")
+    (result,) = run_allure(project)
+    assert result["status"] in ("failed", "broken")
+    for path in (project.root / "allure").glob("*.json"):
+        text = path.read_text()
+        assert str(Path.home()) not in text
+        assert str(project.root) not in text
+    if kind == "hook":
+        assert "~/secret.txt" in json.dumps(result)

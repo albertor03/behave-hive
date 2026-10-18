@@ -58,13 +58,16 @@ def page(tmp_path):
     path = tmp_path / "report.html"
     path.write_text(render(report, summarize(report), 3.2), encoding="utf-8")
     requests = []
+    policy_errors = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
         context = browser.new_context(viewport={"width": 1200, "height": 900})
         tab = context.new_page()
         tab.on("request", lambda r: requests.append(r.url))
+        tab.on("console", lambda msg: policy_errors.append(msg.text) if "Content Security Policy" in msg.text else None)
         tab.goto(path.as_uri())
         tab.requests = requests
+        tab.policy_errors = policy_errors
         tab.screenshot_path = tmp_path / "report.png"
         yield tab
         browser.close()
@@ -121,3 +124,12 @@ def test_screenshot_is_shown_and_can_be_enlarged(page):
 def test_no_network_requests_beyond_the_file_itself(page):
     assert all(url.startswith("file://") or url.startswith("data:") for url in page.requests)
     page.screenshot(path=str(page.screenshot_path), full_page=True)
+
+
+def test_csp_allows_report_controls_and_images_without_policy_violations(page):
+    assert page.locator('meta[http-equiv="Content-Security-Policy"]').count() == 1
+    page.select_option("#status-filter", "failed")
+    assert visible(page) == 1
+    page.click("#expand-all")
+    assert page.locator("label.zoom img").evaluate("img => img.complete && img.naturalWidth > 0")
+    assert page.policy_errors == []

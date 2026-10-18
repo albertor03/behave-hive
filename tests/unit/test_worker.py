@@ -130,3 +130,36 @@ def test_skipped_scenarios_are_still_reported(project):
     result = run_worker(project, write_plan(project, [f"{f}:7"], ["--no-skipped"]))
     assert result.returncode == 0, result.stdout + result.stderr
     assert result_scenarios(project)[0]["x-behave-hive"]["status"] == "skipped"
+
+
+@pytest.mark.parametrize("error_class", ["ConfigError", "TagExpressionError"])
+def test_configuration_error_exits_1_without_results_or_traceback(project, error_class):
+    plan = write_plan(project, [feature_path(project)])
+    project.write(
+        "worker_error.py",
+        f'''
+        import sys
+        from behave.exception import {error_class}
+        from behave_hive import worker
+
+        def invalid_config(args):
+            raise {error_class}("invalid worker configuration")
+
+        worker.build_behave_config = invalid_config
+        sys.exit(worker.main(["--plan", sys.argv[1]]))
+        ''',
+    )
+    result = project.run("worker_error", str(plan))
+    assert result.returncode == 1
+    assert f"{error_class}: invalid worker configuration" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (project.root / "tmp/batch-1.json").exists()
+
+
+def test_importing_worker_does_not_start_a_run_or_parse_arguments(project):
+    project.write("import_worker.py", "import behave_hive.worker\n")
+    before = set(project.root.iterdir())
+    result = project.run("import_worker")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == result.stderr == ""
+    assert set(project.root.iterdir()) == before

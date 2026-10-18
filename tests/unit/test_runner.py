@@ -1,4 +1,6 @@
 import json
+import os
+import stat
 import threading
 import time
 from pathlib import Path
@@ -7,6 +9,7 @@ import pytest
 
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
+from behave_hive.errors import HiveError
 from behave_hive.runner import (
     build_command,
     build_plan,
@@ -302,3 +305,25 @@ def test_path_map_reaches_every_plan_of_prepare_jobs(tmp_path):
     jobs = prepare_jobs([batch(1), batch(2)], tmp_path, [], allure=False, path_map={expanded: original})
     for job in jobs:
         assert json.loads(job.plan_path.read_text())["path_map"] == {str(expanded): str(original)}
+
+
+def test_plan_permissions_are_owner_only_even_with_a_permissive_umask(tmp_path):
+    mask = os.umask(0)
+    try:
+        plan_path = build_plan(batch(), tmp_path, ["-D", "secret=value"], allure=False)
+    finally:
+        os.umask(mask)
+    plan = json.loads(plan_path.read_text())
+    assert stat.S_IMODE(plan_path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(plan_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(Path(plan["locations_file"]).stat().st_mode) == 0o600
+
+
+def test_plan_permissions_reject_an_existing_locations_file_without_overwriting(tmp_path):
+    target = tmp_path / "tmp"
+    target.mkdir()
+    locations = target / "batch-1.locations"
+    locations.write_text("keep")
+    with pytest.raises(HiveError, match="cannot write private run file"):
+        build_plan(batch(), tmp_path, [], allure=False)
+    assert locations.read_text() == "keep"

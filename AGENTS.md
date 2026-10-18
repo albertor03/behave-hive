@@ -14,6 +14,7 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 
 | Path | Contents |
 |---|---|
+| `STATUS.md` | Verified project snapshot, delivery state and pending work; distinguish implementation from integration/publication. |
 | `src/behave_hive/` | The package. One module per concern: `expand`, `roots`, `config`, `discovery`, `batching`, `selection`, `status`, `worker`, `lock`, `runner`, `merge`, `summary`, `html_report`, `cli`, `formatters/`. |
 | `tests/unit/` | Fast tests, no browser. |
 | `tests/e2e/` | Runs `example/` with Playwright (`e2e` marker). |
@@ -40,7 +41,7 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 | Packaging tests | `.venv/bin/pytest -m packaging` (requires `uv`) |
 | Lint, complexity and security | `.venv/bin/ruff check src tests` |
 | Source duplication (six matching lines) | `.venv/bin/pylint src` |
-| Branch coverage, including subprocesses (at least 90%) | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-report=term-missing` |
+| Exact 100% library statements and branches, including subprocesses | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=json:coverage.json` |
 | Dependency audit | `.venv/bin/pip-audit --local --skip-editable` |
 
 ## Continuous integration and releases
@@ -50,6 +51,12 @@ CI has six jobs: `unit` (Linux/macOS, Python 3.11-3.14), `e2e`, `packaging`,
 actionlint is a versioned CLI download with a verified checksum. Read the
 `e2e-reports` and `coverage` artifacts on a failed run (retained for seven days).
 Set `BEHAVE_HIVE_E2E_KEEP` locally to preserve example reports by test name.
+The coverage artifact includes `coverage.json`: `missing_lines` and
+`missing_branches` must both be zero, with no excluded library lines. Report
+covered/total/missing statement and branch counts separately; the combined
+percentage is not branch coverage. Keep all of `src/behave_hive`, including new
+modules, in the denominator; never add omit/exclusion patterns to reach the gate.
+Scripts, tests, examples and dependencies are outside this library-only target.
 
 CodeQL, dependency review and Dependabot provide repository security checks.
 Release tags run `verify` -> `build` -> `test-install` (pip/uv) -> `publish` ->

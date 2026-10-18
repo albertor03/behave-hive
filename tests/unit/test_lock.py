@@ -1,7 +1,10 @@
+import os
+import stat
+
 import pytest
 
 from behave_hive.errors import HiveError
-from behave_hive.lock import results_lock
+from behave_hive.lock import LOCK_NAME, results_lock
 
 
 def test_second_lock_on_the_same_directory_raises_and_deletes_nothing(tmp_path):
@@ -43,3 +46,17 @@ def test_lock_creates_the_results_directory(tmp_path):
 def test_different_directories_do_not_conflict(tmp_path):
     with results_lock(tmp_path / "a"), results_lock(tmp_path / "b"):
         pass
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_lock_permissions_are_owner_only_for_new_and_existing_files(tmp_path, existing):
+    if existing:
+        lock = tmp_path / LOCK_NAME
+        lock.write_text("")
+        lock.chmod(0o644)
+    mask = os.umask(0)
+    try:
+        with results_lock(tmp_path):
+            assert stat.S_IMODE((tmp_path / LOCK_NAME).stat().st_mode) == 0o600
+    finally:
+        os.umask(mask)

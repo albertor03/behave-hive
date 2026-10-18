@@ -73,6 +73,15 @@ class ExecutionResult:
 # -- plans --------------------------------------------------------------------------
 
 
+def _write_private(path: Path, text: str) -> None:
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+    except OSError as exc:
+        raise HiveError(f"cannot write private run file {path}: {exc}") from None
+
+
 def build_plan(
     batch: Batch,
     results_dir: Path,
@@ -82,13 +91,14 @@ def build_plan(
 ) -> Path:
     """Write the locations file and the JSON plan of `batch`; return the plan path."""
     tmp = Path(results_dir).resolve() / "tmp"
-    tmp.mkdir(parents=True, exist_ok=True)
+    tmp.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp.chmod(0o700)
     locations = tmp / f"batch-{batch.index}.locations"
-    locations.write_text(
+    _write_private(
+        locations,
         "".join(
             f"{unit.path}\n" if unit.line is None else f"{unit.path}:{unit.line}\n" for unit in batch.units
         ),
-        encoding="utf-8",
     )
     plan = {
         "locations_file": str(locations),
@@ -98,7 +108,7 @@ def build_plan(
         "path_map": {str(expanded): str(original) for expanded, original in (path_map or {}).items()},
     }
     plan_path = tmp / f"batch-{batch.index}.plan.json"
-    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    _write_private(plan_path, json.dumps(plan, indent=2))
     return plan_path
 
 
@@ -213,7 +223,8 @@ def execute_batches(
                 try:
                     outcome.returncode = proc.wait()
                 finally:
-                    procs.pop(job.batch.index, None)
+                    with launch_lock:
+                        procs.pop(job.batch.index, None)
                 outcome.slot = slot
                 outcome.seconds = time.monotonic() - started
         finally:
@@ -239,15 +250,17 @@ def execute_batches(
         with launch_lock:
             cancel.set()
             running = list(procs.values())
+            for proc in running:
+                if proc.poll() is None:
+                    kill_group(proc.pid, signal.SIGTERM)
         result.interrupted = True
-        for proc in running:
-            kill_group(proc.pid, signal.SIGTERM)
         deadline = time.monotonic() + grace
         for proc in running:
             while proc.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
-            if proc.poll() is None:
-                kill_group(proc.pid, signal.SIGKILL)
+            with launch_lock:
+                if proc.poll() is None:
+                    kill_group(proc.pid, signal.SIGKILL)
     finally:
         executor.shutdown(wait=True)
 
@@ -319,8 +332,12 @@ def _examples_report(inputs: list[Path], lang: str) -> list[str]:
 
 
 def _write_json_atomically(path: Path, data: object) -> None:
+    _write_text_atomically(path, json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _write_text_atomically(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -393,7 +410,14 @@ def _run_locked(cfg, roots, lang, results_dir, run_dir, keep_tmp, started) -> in
     summary = summarize(report)
     duration = time.monotonic() - started
     if "html" in cfg.formats:
-        (results_dir / "report.html").write_text(render(report, summary, duration), encoding="utf-8")
+        report_path = cfg.report_path or results_dir / "report.html"
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_text_atomically(
+                report_path, render(report, summary, duration, report_name=cfg.report_name or "behave-hive report")
+            )
+        except OSError as exc:
+            raise HiveError(f"cannot write HTML report to {report_path}: {exc}") from None
 
     print(format_summary(summary, duration))
     for outcome in execution.batch_errors:
