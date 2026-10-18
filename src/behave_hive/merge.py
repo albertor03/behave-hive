@@ -72,10 +72,10 @@ def pair_backgrounds(elements: list[dict]) -> list[tuple[dict | None, dict]]:
 
 
 def _attach_source(scenario: dict, source: RowSource, path_map: PathMap, cwd: Path) -> None:
-    csv_path = _to_original(str(source.csv_path), path_map, cwd)
+    data_path = _to_original(str(source.data_path), path_map, cwd)
     with suppress(ValueError):
-        csv_path = Path(csv_path).relative_to(cwd).as_posix()
-    scenario.setdefault(EXTENSION, {})["source"] = {"csv_path": csv_path, "csv_row": source.csv_row}
+        data_path = Path(data_path).relative_to(cwd).as_posix()
+    scenario.setdefault(EXTENSION, {})["source"] = {"data_path": data_path, "data_row": source.data_row}
 
 
 def _rewrite_feature(

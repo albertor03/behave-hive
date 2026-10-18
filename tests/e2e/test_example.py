@@ -12,11 +12,12 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "example"
-EXAMPLE_SCENARIOS = 24
+EXAMPLE_SCENARIOS = 33
 EXAMPLE_FEATURES = [
     "features/csv/forms.feature",
     "features/csv/mixed_and_tagged.feature",
     "features/csv/special_characters.feature",
+    "features/json/users.feature",
     "features/login.feature",
     "features/structure/background_and_rule.feature",
     "features/structure/step_data.feature",

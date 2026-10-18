@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
+### Added
+
+- **JSON Examples:** a single `| data/users.json |` or `| read('data/users.json') |` cell under `Examples:` is replaced by the objects of the file (an array of objects with the same keys; strings, numbers, booleans and `null`). JSON, CSV and hand-written tables can live in the same outline; every JSON error names the feature, the line, the file and the object; the HTML report shows `path.json:N` for each scenario. The start-of-run summary adds `from JSON` when a suite uses JSON tables.
+
+### Changed
+
+- Errors raised for data files are `ExamplesDataError` (`CsvExamplesError` remains as an alias), and the internal `x-behave-hive` source uses `data_path` and `data_row` instead of `csv_path` and `csv_row`.
+
 ## [0.1.1] - 2026-10-18
 
 ### Fixed

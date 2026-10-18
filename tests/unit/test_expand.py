@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from behave_hive.errors import CsvExamplesError
+from behave_hive.errors import ExamplesDataError
 from behave_hive.expand import ExamplesRef, RowSource, classify_examples, expand_feature_text
 
 I18N = Path(__file__).parent.parent / "fixtures" / "i18n"
@@ -32,12 +32,36 @@ def outline(examples_rows: str, keyword: str = "Examples") -> str:
 )
 def test_classification_csv_cell(cell, path):
     refs = classify_examples(outline(f"      | {cell} |\n"), "en")
-    assert refs == [ExamplesRef(kind="csv", line=6, csv_path=path)]
+    assert refs == [ExamplesRef(kind="csv", line=6, data_path=path)]
+
+
+@pytest.mark.parametrize(
+    "cell, path",
+    [
+        ("read('data/users.json')", "data/users.json"),
+        ('read("data/users.JSON")', "data/users.JSON"),
+        ("data/users.json", "data/users.json"),
+        ("../shared/users.Json", "../shared/users.Json"),
+    ],
+)
+def test_classification_json_cell(cell, path):
+    refs = classify_examples(outline(f"      | {cell} |\n"), "en")
+    assert refs == [ExamplesRef(kind="json", line=6, data_path=path)]
+
+
+def test_classification_read_of_other_extension_is_inline():
+    refs = classify_examples(outline("      | read('data/users.txt') |\n"), "en")
+    assert refs == [ExamplesRef(kind="inline", line=6, data_path=None)]
+
+
+def test_classification_json_reference_does_not_allow_more_rows():
+    with pytest.raises(ExamplesDataError):
+        classify_examples(outline("      | data/users.json |\n      | x |\n"), "en")
 
 
 def test_classification_inline_table():
     refs = classify_examples(outline("      | user | password |\n      | a | b |\n"), "en")
-    assert refs == [ExamplesRef(kind="inline", line=6, csv_path=None)]
+    assert refs == [ExamplesRef(kind="inline", line=6, data_path=None)]
 
 
 def test_classification_single_non_csv_cell_is_inline():
@@ -58,7 +82,7 @@ def test_classification_scenarios_keyword_is_an_examples_keyword():
 def test_classification_skips_blank_and_comment_lines_before_the_table():
     text = outline("\n      # note\n      | a.csv |\n")
     refs = classify_examples(text, "en")
-    assert refs == [ExamplesRef(kind="csv", line=8, csv_path="a.csv")]
+    assert refs == [ExamplesRef(kind="csv", line=8, data_path="a.csv")]
 
 
 def test_classification_tagged_examples_and_two_tables():
@@ -85,7 +109,7 @@ def test_classification_examples_without_table_yields_nothing():
 def test_classification_leading_blanks_and_comments_do_not_hide_language_directive(prefix):
     text = (I18N / "es_csv.feature").read_text(encoding="utf-8")
     refs = classify_examples(prefix + text, "en")
-    assert refs == [ExamplesRef(kind="csv", line=7 + prefix.count("\n"), csv_path="data/users.csv")]
+    assert refs == [ExamplesRef(kind="csv", line=7 + prefix.count("\n"), data_path="data/users.csv")]
 
 
 @pytest.mark.parametrize("text", ["", "\n", "# only a comment\n\n"])
@@ -102,13 +126,13 @@ def test_classification_does_not_treat_non_table_examples_content_as_csv(body):
 def test_classification_language_from_directive_es():
     text = (I18N / "es_csv.feature").read_text(encoding="utf-8")
     refs = classify_examples(text, "en")
-    assert refs == [ExamplesRef(kind="csv", line=7, csv_path="data/users.csv")]
+    assert refs == [ExamplesRef(kind="csv", line=7, data_path="data/users.csv")]
 
 
 def test_classification_language_from_directive_fr():
     text = (I18N / "fr_csv.feature").read_text(encoding="utf-8")
     refs = classify_examples(text, "en")
-    assert refs == [ExamplesRef(kind="csv", line=7, csv_path="data/users.csv")]
+    assert refs == [ExamplesRef(kind="csv", line=7, data_path="data/users.csv")]
 
 
 def test_classification_language_from_parameter_without_directive():
@@ -159,7 +183,7 @@ def test_docstring_other_delimiter_inside_does_not_close_it():
         "      | x.csv |\n"
     )
     refs = classify_examples(text, "en")
-    assert [(r.kind, r.csv_path, r.line) for r in refs] == [("csv", "x.csv", 11)]
+    assert [(r.kind, r.data_path, r.line) for r in refs] == [("csv", "x.csv", 11)]
 
 
 def test_extra_rows_after_csv_reference_raise_with_the_line(tmp_path):
@@ -170,7 +194,7 @@ def test_extra_rows_after_csv_reference_raise_with_the_line(tmp_path):
               | x |
         """
     )
-    with pytest.raises(CsvExamplesError) as exc:
+    with pytest.raises(ExamplesDataError) as exc:
         expand_feature_text(text, tmp_path / "login.feature", "en")
     assert exc.value.line == 5
     assert "login.feature" in str(exc.value)
@@ -187,7 +211,7 @@ def test_extra_rows_after_comment_are_still_rejected():
               | x |
         """
     )
-    with pytest.raises(CsvExamplesError):
+    with pytest.raises(ExamplesDataError):
         classify_examples(text, "en")
 
 
@@ -229,7 +253,7 @@ def test_expansion_resolves_path_relative_to_feature_with_dotdot(tmp_path):
     text = feature("Examples:\n  | ../shared/u.csv |\n")
     result = expand_feature_text(text, tmp_path / "auth" / "a.feature", "en")
     assert "| 1 |" in result.text
-    assert result.sources[0].csv_path == tmp_path / "shared" / "u.csv"
+    assert result.sources[0].data_path == tmp_path / "shared" / "u.csv"
 
 
 @pytest.mark.parametrize("eol", ["\n", "\r\n"])
@@ -311,7 +335,7 @@ def test_expansion_sources_record_expanded_line_csv_and_row(tmp_path):
 
 def test_expansion_errors_name_feature_line_and_csv(tmp_path):
     text = feature("Examples:\n  | missing.csv |\n")
-    with pytest.raises(CsvExamplesError) as exc:
+    with pytest.raises(ExamplesDataError) as exc:
         expand_feature_text(text, tmp_path / "a.feature", "en")
     assert exc.value.line == 5
     assert "a.feature" in str(exc.value) and "missing.csv" in str(exc.value)
@@ -324,3 +348,34 @@ def test_expansion_language_from_directive(tmp_path):
     (tmp_path / "data" / "users.csv").write_text("user\nu1\n")
     out = expand_feature_text(text, tmp_path / "a.feature", "en").text
     assert "| u1 |" in out
+
+
+def test_expansion_replaces_a_json_reference(tmp_path):
+    (tmp_path / "users.json").write_text(
+        '[{"user": "admin", "age": 30, "ok": true}, {"user": "guest", "age": null, "ok": false}]'
+    )
+    text = feature("Examples:\n  | users.json |\n")
+    result = expand_feature_text(text, tmp_path / "a.feature", "en")
+    assert result.text == feature(
+        "Examples:\n  | user | age | ok |\n  | admin | 30 | true |\n  | guest |  | false |\n"
+    )
+    assert [(s.data_path, s.data_row) for s in result.sources] == [
+        (tmp_path / "users.json", 1),
+        (tmp_path / "users.json", 2),
+    ]
+
+
+def test_expansion_mixes_csv_json_and_inline_tables(tmp_path):
+    csv_file(tmp_path, "v\nfrom_csv\n")
+    (tmp_path / "d.json").write_text('[{"v": "from_json"}]')
+    text = feature("Examples:\n  | d.json |\n\n  Examples:\n  | v |\n  | inline |\n\n  Examples:\n  | data.csv |\n")
+    result = expand_feature_text(text, tmp_path / "a.feature", "en")
+    assert "| from_json |" in result.text and "| inline |" in result.text and "| from_csv |" in result.text
+    assert [(s.data_path.name, s.data_row) for s in result.sources] == [("d.json", 1), ("data.csv", 2)]
+
+
+def test_expansion_reports_a_bad_json_with_feature_and_line(tmp_path):
+    (tmp_path / "d.json").write_text("[]")
+    with pytest.raises(ExamplesDataError) as exc:
+        expand_feature_text(feature("Examples:\n  | d.json |\n"), tmp_path / "a.feature", "en")
+    assert "a.feature" in str(exc.value) and "d.json" in str(exc.value)

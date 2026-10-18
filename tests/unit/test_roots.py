@@ -59,6 +59,13 @@ def test_needs_expansion_true_with_a_csv_reference(tree):
     assert needs_expansion(tree, "en") is True
 
 
+def test_needs_expansion_true_with_a_json_reference(tree):
+    (tree / "auth" / "login.feature").write_text(
+        "Feature: F\n  Scenario Outline: S\n    Given x\n    Examples:\n      | a.json |\n"
+    )
+    assert needs_expansion(tree, "en") is True
+
+
 def test_needs_expansion_ignores_csv_lookalike_in_docstring(tree):
     (tree / "other.feature").write_text(
         'Feature: F\n  Scenario: S\n    Given x\n      """\n      Examples:\n      | a.csv |\n      """\n'

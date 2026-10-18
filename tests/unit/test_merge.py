@@ -176,8 +176,8 @@ def test_merge_attaches_the_row_source():
     ]}
     (feat,) = run([[feature(str(uri), [scenario(3), scenario(5), scenario(7)])]], sources).features
     assert [e["x-behave-hive"].get("source") for e in feat["elements"]] == [
-        {"csv_path": "features/data/login.csv", "csv_row": 2},
-        {"csv_path": "features/data/login.csv", "csv_row": 3},
+        {"data_path": "features/data/login.csv", "data_row": 2},
+        {"data_path": "features/data/login.csv", "data_row": 3},
         None,
     ]
 

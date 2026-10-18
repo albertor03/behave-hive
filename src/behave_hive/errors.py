@@ -15,8 +15,8 @@ class ConfigError(HiveError):
     """Invalid or incompatible configuration."""
 
 
-class CsvExamplesError(HiveError):
-    """A problem with a CSV reference in a feature or with the CSV itself."""
+class ExamplesDataError(HiveError):
+    """A problem with a CSV or JSON reference in a feature or with the data file itself."""
 
     def __init__(
         self,
@@ -24,16 +24,19 @@ class CsvExamplesError(HiveError):
         *,
         feature: Path | None = None,
         line: int | None = None,
-        csv_path: Path | None = None,
-        csv_row: int | None = None,
+        data_path: Path | None = None,
+        data_row: int | None = None,
     ) -> None:
         self.feature = feature
         self.line = line
-        self.csv_path = csv_path
-        self.csv_row = csv_row
+        self.data_path = data_path
+        self.data_row = data_row
         where = []
         if feature is not None:
             where.append(f"{feature}" + (f", line {line}" if line is not None else ""))
-        if csv_path is not None:
-            where.append(f"{csv_path}" + (f", row {csv_row}" if csv_row is not None else ""))
+        if data_path is not None:
+            where.append(f"{data_path}" + (f", row {data_row}" if data_row is not None else ""))
         super().__init__(f"{message} ({'; '.join(where)})" if where else message)
+
+
+CsvExamplesError = ExamplesDataError

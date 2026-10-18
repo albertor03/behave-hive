@@ -1,7 +1,7 @@
 # behave-hive example
 
 A runnable behave project: Playwright drives a local login page (`app/login.html`) and the
-scenarios read their data from CSV files. Each feature shows one capability of behave-hive.
+scenarios read their data from CSV and JSON files. Each feature shows one capability of behave-hive.
 
 ## Run it
 
@@ -24,6 +24,7 @@ The commands assume the environment is active; otherwise prefix them with `uv ru
 | `features/csv/forms.feature` | The plain path (the default form), `read('...')` with single and double quotes, and a data file shared through `..`. | `behave-hive run features/csv/forms.feature` |
 | `features/csv/mixed_and_tagged.feature` | CSV (plain path and `read()`) and hand-written tables in one outline, each `Examples:` with its own tag. | `behave-hive run -- --tags=@smoke` (or `@regression`) |
 | `features/csv/special_characters.feature` | A pipe, a comma in quotes and a percent sign inside CSV cells reach the step intact. | `behave-hive run features/csv/special_characters.feature` |
+| `features/json/users.feature` | Examples read from JSON files: the plain path, `read('...')`, a JSON table next to a hand-written one, and numeric values. | `behave-hive run features/json` |
 | `features/structure/background_and_rule.feature` | `Background` and `Rule` with CSV `Examples:`. | `behave-hive run features/structure` |
 | `features/structure/step_data.feature` | Step data tables and docstrings; text inside a docstring is never read as `Examples:`. | `behave-hive run features/structure/step_data.feature` |
 | `features/environment.py` | A browser per scenario and a screenshot attached to every failed step (it appears in the HTML report and in Allure). | |
@@ -40,7 +41,7 @@ The commands assume the environment is active; otherwise prefix them with `uv ru
 ## Inspect what behave-hive does
 
 ```bash
-behave-hive expand features /tmp/expanded    # the features with every CSV table written out
+behave-hive expand features /tmp/expanded    # the features with every CSV and JSON table written out
 ```
 
 From a checkout of this repository you can use the local code instead: `uv pip install -e "..[allure,playwright]"`.

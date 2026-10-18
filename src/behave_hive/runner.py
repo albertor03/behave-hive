@@ -140,21 +140,23 @@ def remove_tmp(results_dir: Path, run_dir: Path | None) -> None:
 
 
 def _examples_report(inputs: list[Path], lang: str) -> list[str]:
-    """`Examples: <i> inline, <c> from CSV` plus the CSV files in use."""
-    inline = csv_tables = 0
-    csv_files: list[str] = []
+    """`Examples: <i> inline, <c> from CSV[, <j> from JSON]` plus the data files in use."""
+    counts = {"inline": 0, "csv": 0, "json": 0}
+    data_files: list[str] = []
     for feature in feature_files(inputs):
         for ref in classify_examples(feature.read_text(encoding="utf-8"), lang):
+            counts[ref.kind] += 1
             if ref.kind == "inline":
-                inline += 1
                 continue
-            csv_tables += 1
-            csv_file = Path(os.path.normpath(feature.parent / ref.csv_path))
+            data_file = Path(os.path.normpath(feature.parent / ref.data_path))
             with suppress(ValueError):
-                csv_file = csv_file.relative_to(Path.cwd())
-            if csv_file.as_posix() not in csv_files:
-                csv_files.append(csv_file.as_posix())
-    return [f"Examples: {inline} inline, {csv_tables} from CSV", *(f"  - {name}" for name in csv_files)]
+                data_file = data_file.relative_to(Path.cwd())
+            if data_file.as_posix() not in data_files:
+                data_files.append(data_file.as_posix())
+    summary = f"Examples: {counts['inline']} inline, {counts['csv']} from CSV"
+    if counts["json"]:
+        summary += f", {counts['json']} from JSON"
+    return [summary, *(f"  - {name}" for name in data_files)]
 
 
 def _write_json_atomically(path: Path, data: object) -> None:

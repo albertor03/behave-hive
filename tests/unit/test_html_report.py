@@ -132,7 +132,7 @@ def test_scenario_carries_filter_attributes_and_tag_chips():
 
 
 def test_shows_the_csv_source_next_to_the_scenario():
-    source = {"csv_path": "features/data/login.csv", "csv_row": 3}
+    source = {"data_path": "features/data/login.csv", "data_row": 3}
     assert "features/data/login.csv:3" in html([feature([scenario("A", source=source)])])
 
 
