@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "behave-hive"
-version = "0.1.1"
+version = "0.3.0"
 description = "Run behave scenarios in parallel with Examples read from CSV files, and get Allure, Cucumber JSON and HTML reports"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +18,7 @@ classifiers = [
     "Framework :: Pytest",
     "Intended Audience :: Developers",
     "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -71,12 +72,15 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # Tests intentionally assert results and launch controlled subprocess commands.
 "tests/**" = ["S101", "S603", "S607"]
+# Windows ends a batch's process tree with the system taskkill, called by absolute path with fixed arguments.
+"src/behave_hive/execution.py" = ["S603"]
 # Release validation invokes only git with fixed options and a fully validated tag.
 ".github/scripts/check_release.py" = ["S603", "S607"]
 
 [tool.pylint.main]
 disable = ["all"]
-enable = ["duplicate-code"]
+# unspecified-encoding: Windows opens text files with the locale encoding unless told otherwise
+enable = ["duplicate-code", "unspecified-encoding"]
 
 [tool.pylint.similarities]
 # Pylint uses an exclusive threshold: five rejects six matching non-signature lines.
@@ -89,6 +93,10 @@ parallel = true
 patch = ["subprocess"]
 sigterm = true
 data_file = ".artifacts/.coverage"
+
+[tool.coverage.paths]
+# The same sources under the Linux and Windows checkouts count as one set of files
+source = ["src/behave_hive", "*/src/behave_hive", "*\\src\\behave_hive"]
 
 [tool.coverage.json]
 output = ".artifacts/coverage.json"

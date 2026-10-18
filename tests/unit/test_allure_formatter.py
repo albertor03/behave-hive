@@ -178,15 +178,10 @@ Feature: Login
 """
 
 
-def run_worker_with_path_map(project, allure_dir):
-    """Expand the tree under .behave-hive, then run a worker on it with the path map."""
-    from behave_hive.expand import expand_tree
-
-    expanded = (project.root / ".behave-hive" / "run-1" / "roots" / "0" / "features")
-    expand_tree(project.features, expanded, "en")
-    expanded = expanded.resolve()
+def run_worker_on_original(project, allure_dir):
+    """Run a worker on the original features, whose data tables it expands in memory."""
     locations = project.root / "tmp.locations"
-    locations.write_text(f"{expanded}/a.feature\n", encoding="utf-8")
+    locations.write_text(f"{project.features.resolve()}/a.feature\n", encoding="utf-8")
     plan = project.root / "tmp.plan.json"
     plan.write_text(
         json.dumps(
@@ -195,7 +190,6 @@ def run_worker_with_path_map(project, allure_dir):
                 "behave_args": [],
                 "cucumber_out": str(project.root / "tmp.json"),
                 "allure_dir": str(allure_dir),
-                "path_map": {str(expanded): str(project.features.resolve())},
             }
         ),
         encoding="utf-8",
@@ -205,26 +199,24 @@ def run_worker_with_path_map(project, allure_dir):
     return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(allure_dir.glob("*-result.json"))]
 
 
-def test_original_paths_title_path_names_the_original_directory(project):
+def test_title_path_names_the_original_directory_of_data_table_rows(project):
     project.write("features/data/v.csv", "v\nok\nok\n")
     project.write("features/a.feature", CSV_OUTLINE)
-    results = run_worker_with_path_map(project, project.root / "allure-out")
+    results = run_worker_on_original(project, project.root / "allure-out")
     assert len(results) == 2
     for result in results:
         assert result["titlePath"] == ["features", "Login"]
-        assert ".behave-hive" not in json.dumps(result["titlePath"])
-        assert "run-" not in json.dumps(result["titlePath"])
 
 
-def test_original_paths_history_id_is_the_same_for_the_original_and_the_expanded_run(project):
+def test_each_data_table_row_has_its_own_history_id(project):
     project.write("features/data/v.csv", "v\nok\nok\n")
     project.write("features/a.feature", CSV_OUTLINE)
-    expanded = run_worker_with_path_map(project, project.root / "allure-out")
-    assert len({r["historyId"] for r in expanded}) == 2
-    assert all(r["fullName"].startswith("Login: Row") for r in expanded)
+    results = run_worker_on_original(project, project.root / "allure-out")
+    assert len({r["historyId"] for r in results}) == 2
+    assert all(r["fullName"].startswith("Login: Row") for r in results)
 
 
-def test_original_paths_without_a_path_map_nothing_changes(project):
+def test_title_path_of_a_plain_feature_ends_with_the_feature_name(project):
     project.write("features/a.feature", 'Feature: F\n  Scenario: S\n    Given value "ok"\n')
     (result,) = run_allure(project)
     assert result["titlePath"][-1] == "F"

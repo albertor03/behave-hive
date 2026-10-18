@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import re
-from contextlib import suppress
-from pathlib import Path
-
-from behave_hive.roots import PathMap
+from pathlib import Path, PurePath, PureWindowsPath
 
 
 def user_home() -> Path | None:
@@ -17,23 +14,30 @@ def user_home() -> Path | None:
         return None
 
 
-def _display(path: Path, cwd: Path, home: Path | None) -> str:
-    if path.is_relative_to(cwd):
-        return path.relative_to(cwd).as_posix()
-    if home is not None and path.is_relative_to(home):
-        return (Path("~") / path.relative_to(home)).as_posix()
-    return path.as_posix()
+# One separator, or two when the text went through JSON or `repr`; then the rest of the path
+WINDOWS_SEPARATOR = r"[\\/]{1,2}"
+WINDOWS_TAIL = rf"(?:{WINDOWS_SEPARATOR}[^\s\\/\"':),;\]]+)*"
 
 
-def scrub(text: str, path_map: PathMap, cwd: Path, home: Path | None) -> str:
+def _with_forward_slashes(text: str, path: PurePath | None) -> str:
+    """Rewrite a Windows `path` and what follows it (backslashes, doubled ones, any case) with `/`."""
+    if not isinstance(path, PureWindowsPath):
+        return text
+    prefix = re.escape(path.drive) + "".join(WINDOWS_SEPARATOR + re.escape(part) for part in path.parts[1:])
+
+    def replace(match: re.Match[str]) -> str:
+        return path.as_posix() + re.sub(r"[\\/]+", "/", match["tail"])
+
+    return re.sub(rf"(?<!\w){prefix}(?P<tail>{WINDOWS_TAIL})(?![\w.-])", replace, text, flags=re.IGNORECASE)
+
+
+def scrub(text: str, cwd: PurePath, home: PurePath | None) -> str:
     """Replace whole path prefixes, longest first, without rewriting unrelated text."""
+    text = _with_forward_slashes(_with_forward_slashes(text, cwd), home)
+    if isinstance(cwd, PureWindowsPath):
+        text = re.sub(r'(?<=File ")[^"]+', lambda match: re.sub(r"\\{1,2}", "/", match[0]), text)
     replacements = {home.as_posix(): "~"} if home is not None else {}
     replacements[cwd.as_posix()] = "."
-    for expanded, original in path_map.items():
-        target = _display(Path(original), cwd, home)
-        replacements[expanded] = target
-        with suppress(ValueError):
-            replacements[Path(expanded).relative_to(cwd).as_posix()] = target
     prefixes = "|".join(re.escape(p) for p in sorted(replacements, key=len, reverse=True))
     pattern = rf"(?<![\w/.-])(?P<prefix>{prefixes})(?=/|$|[\s\"':),;\]])(?P<slash>/?)"
 

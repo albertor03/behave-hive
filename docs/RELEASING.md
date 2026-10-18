@@ -8,8 +8,9 @@ version and its filenames cannot be replaced, even after deletion.
 After creating the public repository and observing the first green CI run, review
 the exact commands and JSON in [apply_settings.sh](../.github/scripts/apply_settings.sh).
 With explicit maintainer approval, run `bash .github/scripts/apply_settings.sh`.
-It requires all eight `unit (OS, Python)` matrix checks and `e2e`, `packaging`,
-`quality`, `coverage`, `actionlint` on both `main` and `develop`, requires up-to-date
+It requires all twelve `unit (OS, Python)` matrix checks (Linux, macOS and Windows) and
+`e2e`, `e2e (windows)`, `packaging`, `packaging (windows)`, `quality`, `coverage`,
+`actionlint` on both `main` and `develop`, requires up-to-date
 pull requests (zero approving code reviews for a solo maintainer), enforces these
 rules for administrators and disallows force pushes and deletion.
 

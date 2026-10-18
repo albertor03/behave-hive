@@ -10,7 +10,7 @@ import pytest
 from behave_hive.batching import Batch
 from behave_hive.discovery import Unit
 from behave_hive.errors import HiveError
-from behave_hive.execution import build_command, execute_batches
+from behave_hive.execution import NEW_GROUP, build_command, execute_batches
 from behave_hive.html_report import REPORT_MARKER
 from behave_hive.runner import (
     build_plan,
@@ -38,8 +38,8 @@ def test_plan_has_locations_file_with_one_absolute_location_per_unit(tmp_path):
     plan = json.loads(plan_path.read_text())
     assert plan_path == tmp_path / "tmp" / "batch-2.plan.json"
     assert Path(plan["locations_file"]) == tmp_path / "tmp" / "batch-2.locations"
-    assert Path(plan["locations_file"]).read_text().splitlines() == [
-        f"{ROOT}/a.feature:10", f"{ROOT}/a.feature:11", f"{ROOT}/a.feature:12",
+    assert Path(plan["locations_file"]).read_text(encoding="utf-8").splitlines() == [
+        f"{ROOT / 'a.feature'}:10", f"{ROOT / 'a.feature'}:11", f"{ROOT / 'a.feature'}:12",
     ]
     assert plan["behave_args"] == ["-D", "k=v"]
     assert Path(plan["cucumber_out"]) == tmp_path / "tmp" / "batch-2.json"
@@ -48,7 +48,7 @@ def test_plan_has_locations_file_with_one_absolute_location_per_unit(tmp_path):
 
 def test_plan_with_feature_units_lists_only_the_file(tmp_path):
     plan = json.loads(build_plan(batch(1, 1, whole_files=True), tmp_path, [], allure=False).read_text())
-    assert Path(plan["locations_file"]).read_text().splitlines() == [f"{ROOT}/a.feature"]
+    assert Path(plan["locations_file"]).read_text(encoding="utf-8").splitlines() == [str(ROOT / "a.feature")]
 
 
 def test_plan_with_allure_has_a_per_batch_allure_dir(tmp_path):
@@ -88,7 +88,7 @@ class Fake:
         self.killed: list[tuple[int, int]] = []
 
     def __call__(self, command, **kwargs):
-        plan = json.loads(Path(command[-1]).read_text())
+        plan = json.loads(Path(command[-1]).read_text(encoding="utf-8"))
         with self.lock:
             pid = next(self.pids)
             slot = int(kwargs["env"]["BEHAVE_HIVE_WORKER"])
@@ -110,7 +110,8 @@ class FakeProc:
                 {"type": "scenario", "id": f"f;s{i}", "line": i + 1, "x-behave-hive": {"status": s}}
                 for i, s in enumerate(self.fake.scenarios)
             ]
-            Path(self.plan["cucumber_out"]).write_text(json.dumps([{"uri": "u", "elements": elements}]))
+            partial = json.dumps([{"uri": "u", "elements": elements}])
+            Path(self.plan["cucumber_out"]).write_text(partial, encoding="utf-8")
         if self.plan["allure_dir"]:
             allure_dir = Path(self.plan["allure_dir"])
             allure_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +158,7 @@ def test_execution_passes_the_one_based_batch_index_and_new_session(tmp_path):
     fake = Fake()
     execute(tmp_path, fake, [batch(i) for i in range(1, 4)], workers=1)
     assert sorted(int(c["env"]["BEHAVE_HIVE_BATCH"]) for c in fake.calls) == [1, 2, 3]
-    assert all(c["start_new_session"] is True for c in fake.calls)
+    assert all(all(c[key] == value for key, value in NEW_GROUP.items()) for c in fake.calls)
     assert all(Path(c["cwd"]) == tmp_path for c in fake.calls)
 
 
@@ -219,7 +220,7 @@ def test_batch_error_invalid_json(tmp_path):
     class Corrupt(Fake):
         def __call__(self, command, **kwargs):
             proc = super().__call__(command, **kwargs)
-            Path(proc.plan["cucumber_out"]).write_text("[{")
+            Path(proc.plan["cucumber_out"]).write_text("[{", encoding="utf-8")
             return proc
 
     corrupt = Corrupt(write_json=False)
@@ -272,43 +273,18 @@ def test_cleanup_tolerates_an_empty_or_missing_results_dir(tmp_path):
     clean_managed(tmp_path / "empty")
 
 
-def test_cleanup_remove_tmp_deletes_the_tmp_dir_and_the_run_dir(tmp_path):
+def test_cleanup_remove_tmp_deletes_only_the_tmp_dir(tmp_path):
     results = make_results(tmp_path)
-    run_dir = tmp_path / ".behave-hive" / "run-1"
-    run_dir.mkdir(parents=True)
-    (run_dir / "x").write_text("x")
-    remove_tmp(results, run_dir)
+    remove_tmp(results)
     assert not (results / "tmp").exists()
-    assert not run_dir.exists()
     assert (results / "cucumber.json").exists()
-    assert (tmp_path / ".behave-hive").exists()
 
 
-def test_cleanup_remove_tmp_tolerates_missing_paths(tmp_path):
-    remove_tmp(tmp_path / "reports", None)
+def test_cleanup_remove_tmp_tolerates_a_missing_results_dir(tmp_path):
+    remove_tmp(tmp_path / "reports")
 
 
-# --- 6.12 path_map in the plan ----------------------------------------------------
-
-
-def test_path_map_is_written_to_the_plan(tmp_path):
-    expanded, original = Path("/proj/.behave-hive/run-1/roots/0/features"), Path("/proj/features")
-    plan = json.loads(build_plan(batch(1), tmp_path, [], allure=True, path_map={expanded: original}).read_text())
-    assert plan["path_map"] == {str(expanded): str(original)}
-
-
-def test_path_map_defaults_to_empty(tmp_path):
-    plan = json.loads(build_plan(batch(1), tmp_path, [], allure=False).read_text())
-    assert plan["path_map"] == {}
-
-
-def test_path_map_reaches_every_plan_of_prepare_jobs(tmp_path):
-    expanded, original = Path("/e/features"), Path("/o/features")
-    jobs = prepare_jobs([batch(1), batch(2)], tmp_path, [], allure=False, path_map={expanded: original})
-    for job in jobs:
-        assert json.loads(job.plan_path.read_text())["path_map"] == {str(expanded): str(original)}
-
-
+@pytest.mark.skipif(os.name == "nt", reason="owner-only modes are a POSIX feature")
 def test_plan_permissions_are_owner_only_even_with_a_permissive_umask(tmp_path):
     mask = os.umask(0)
     try:
@@ -378,6 +354,7 @@ def test_stale_report_cleanup_ignores_missing_files_directories_and_symlinks(tmp
     assert link.is_symlink() and real.exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="chmod cannot make a file unreadable on Windows")
 def test_stale_report_cleanup_ignores_unreadable_files(tmp_path):
     report = tmp_path / "report.html"
     report.write_text(REPORT_MARKER, encoding="utf-8")

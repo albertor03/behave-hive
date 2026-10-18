@@ -13,18 +13,18 @@ behave-hive is a layer on top of [behave](https://github.com/behave/behave) 1.3.
 
 ## How a run flows
 
-`cli` → `config` → `roots` (group inputs by features root) → `expand` (write the CSV tables into a
-working copy of the root) → `discovery` (units: scenarios or features) → `batching` →
+`cli` → `config` → `roots` (group inputs by features root) → `discovery` (units: scenarios or features,
+parsed with the CSV and JSON tables expanded in memory by `parsing`) → `batching` →
 `runner.prepare_jobs` (a private plan per batch) → `execution` (one `worker` process per batch,
-each running behave with the Cucumber and Allure formatters) → `merge` (original paths, stable
-ids) → `summary` and `html_report`. Sequential mode is the same pipeline with one worker.
+each running behave with the Cucumber and Allure formatters) → `merge` (stable ids, data-file
+sources) → `summary` and `html_report`. Sequential mode is the same pipeline with one worker.
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
 | `src/behave_hive/cli.py`, `config.py` | Command line and `[behave_hive]` settings; precedence default < file < command line. |
-| `expand.py`, `roots.py` | CSV `Examples:` scanner and the expanded copy of a features root; `PathMap` between expanded and original paths. |
+| `expand.py`, `parsing.py`, `roots.py` | CSV and JSON `Examples:` scanner and reader; behave's feature parser patched to expand them in memory; features roots. |
 | `discovery.py`, `batching.py`, `selection.py`, `status.py` | Which scenarios run, how they split into batches, which ones behave selected, status mapping. |
 | `runner.py`, `execution.py`, `worker.py`, `lock.py` | Plans, cleanup and the `run` orchestration; process pool and interruption; the per-batch behave process; the `results_dir` lock. |
 | `merge.py`, `privacy.py`, `summary.py`, `html_report.py`, `templates/report.html` | Merge of partial results, path scrubbing, totals and the HTML page (one inline script, no external resources). |
@@ -60,7 +60,7 @@ directly to either.
 | Packaging tests | `.venv/bin/pytest -m packaging` (requires `uv`) |
 | Lint, complexity and security | `.venv/bin/ruff check src tests` |
 | Source duplication (six matching lines) | `.venv/bin/pylint src` |
-| Exact 100% library statements and branches, including subprocesses | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-report=term-missing --cov-report=json` |
+| Library statements and branches, including subprocesses (exactly 100% only once the Linux and Windows CI runs are combined) | `.venv/bin/pytest -m "not e2e and not packaging" --cov --cov-fail-under=0 --cov-report=term-missing --cov-report=json` |
 | Dependency audit | `.venv/bin/pip-audit --local --skip-editable` |
 
 Coverage data and reports (`.coverage`, `coverage.json`, `coverage.xml`, `htmlcov/`) are written to `.artifacts/`, which is git-ignored, so the project root stays clean. Put any other scratch output of local tools there too.
@@ -72,7 +72,7 @@ A change is done when all of these hold, and you report the real output, not a s
 - the new behavior has a test that failed first;
 - unit, e2e and packaging tests pass;
 - `ruff check src tests` is clean (complexity at most 10, no exceptions) and `pylint src` is 10/10;
-- `.artifacts/coverage.json` shows `missing_lines` and `missing_branches` both zero and no excluded lines. Report statement and branch counts separately; the combined percentage is not branch coverage. Every module of `src/behave_hive` stays in the denominator; never add `omit` or exclusion patterns to reach the gate;
+- the CI `coverage` job, which combines the Linux and Windows runs, shows `missing_lines` and `missing_branches` both zero and no excluded lines; a local run on macOS or Linux may miss only the `os.name == "nt"` code. Report statement and branch counts separately; the combined percentage is not branch coverage. Every module of `src/behave_hive` stays in the denominator; never add `omit` or exclusion patterns to reach the gate;
 - `pip-audit` reports no vulnerabilities;
 - README, CHANGELOG and `example/` are updated when behavior a user can see changes.
 
@@ -99,7 +99,9 @@ A change is done when all of these hold, and you report the real output, not a s
 
 ## Things that bite
 
-- Steps run through symlinks in the expanded tree: resolve `Path(__file__)` before looking for files next to a step.
+- Tables are expanded in memory by replacing `behave.parser.parse_file` in the worker; behave sees the original path with the line numbers of the expanded text. A unit test fails if behave stops calling `gherkin.parse_file`.
+- Platform code lives in `lock.py` and `execution.py` (`os.name == "nt"`). Windows branches are covered only by the Windows CI run, so locally the coverage report lists exactly those lines as missing; CI combines both runs.
+- Every text file is opened with an explicit `encoding` (`pylint src` enforces it): Windows defaults to the locale encoding.
 - Reports must not leak the run directory or the user's home: route error text through `privacy.scrub`.
 - `context.attach` reaches Allure only because `AllureFormatter` defines `embedding`; keep that when touching the formatter.
 - The HTML page has a hash-based Content-Security-Policy: change the inline script freely (the hash is computed at render time) but do not add external resources or inline event handlers.

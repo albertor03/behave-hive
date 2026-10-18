@@ -180,3 +180,17 @@ def test_no_environment_properties_without_environment_data(project):
     allure_dir = project.root / "tmp" / "allure-batch-1"
     run_worker(project, write_plan(project, [f"{f}:7"], allure_dir=allure_dir))
     assert not (allure_dir / "environment.properties").exists()
+
+
+def test_runs_the_rows_of_a_data_file_without_an_expanded_copy(project):
+    project.write("features/data/v.csv", "v\nok\nok\nbad\n")
+    text = (
+        'Feature: D\n  Scenario Outline: O\n    Given value "<v>"\n    Examples:\n      | data/v.csv |\n'
+    )
+    path = project.write("features/d.feature", text).resolve()
+    plan = write_plan(project, [str(path)])
+    result = run_worker(project, plan)
+    assert result.returncode == 1, result.stdout + result.stderr
+    statuses = sorted(s["steps"][0]["result"]["status"] for s in result_scenarios(project))
+    assert statuses == ["failed", "passed", "passed"]
+    assert path.read_text(encoding="utf-8") == text

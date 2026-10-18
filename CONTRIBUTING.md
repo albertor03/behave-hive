@@ -31,11 +31,12 @@ The CI workflow runs on pushes and pull requests to `main` and `develop`:
 
 | Job | Purpose |
 | --- | --- |
-| `unit` | Linux and macOS, Python 3.11, 3.12, 3.13 and 3.14 |
-| `e2e` | Chromium example and HTML report interactions |
-| `packaging` | Build and install the wheel with pip and uv |
+| `unit` | Linux, macOS and Windows, Python 3.11, 3.12, 3.13 and 3.14 |
+| `e2e`, `e2e (windows)` | Chromium example and HTML report interactions |
+| `packaging`, `packaging (windows)` | Build and install the wheel with pip and uv |
 | `quality` | Ruff, pylint duplicate-code, pip-audit |
-| `coverage` | Unit suite: exactly 100% library statements and branches, including subprocesses |
+| `measure` | Unit suite with coverage on Linux and on Windows; each uploads its data |
+| `coverage` | Combines both data sets: exactly 100% library statements and branches, including subprocesses |
 | `actionlint` | Validate all workflow files and expressions |
 
 Runs have timeouts and superseded CI runs are cancelled. Action references use

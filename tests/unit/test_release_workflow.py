@@ -28,12 +28,14 @@ def test_release_verifies_then_builds_once_and_defaults_to_rehearsal(workflow):
     assert "twine check dist/*" in job(workflow, "build") and "name: dist" in job(workflow, "build")
 
 
-def test_release_installs_the_same_artifact_with_both_installers(workflow):
+def test_release_installs_the_same_artifact_with_both_installers_on_linux_and_windows(workflow):
     body = job(workflow, "test-install")
     assert "needs: build" in body and "installer: [pip, uv]" in body
+    assert "os: [ubuntu-latest, windows-latest]" in body and "runs-on: ${{ matrix.os }}" in body
     assert "actions/download-artifact@" in body and "name: dist" in body
     assert 'pip install dist/*.whl' in body and 'uv pip install --python' in body
-    assert 'behave-hive --version' in body and 'behave-hive $VERSION' in body
+    assert 'behave-hive" --version' in body and 'behave-hive $VERSION' in body
+    assert "'Scripts' || 'bin'" in body and "shell: bash" in body
     assert "python -m venv" in body
 
 
