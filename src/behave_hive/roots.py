@@ -41,10 +41,10 @@ def group_by_root(inputs: list[Path]) -> dict[Path, list[Path]]:
 
 
 def needs_expansion(root: Path, lang: str) -> bool:
-    """True if any `.feature` under `root` has a `csv` Examples table."""
+    """True if any `.feature` under `root` has a `csv` or `json` Examples table."""
     for feature in sorted(Path(root).rglob("*.feature")):
         text = feature.read_text(encoding="utf-8")
-        if any(ref.kind == "csv" for ref in classify_examples(text, lang)):
+        if any(ref.kind != "inline" for ref in classify_examples(text, lang)):
             return True
     return False
 

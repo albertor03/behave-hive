@@ -133,6 +133,34 @@ def test_run_reports_inline_and_csv_example_tables_and_the_csv_files(project):
     assert "Mode: sequential" in result.stdout
 
 
+def test_run_json_only_suite_passes_every_object_and_reports_the_json_tables(project):
+    project.write("features/data/values.json", '[{"v": "ok"}, {"v": "ok"}, {"v": "ok"}, {"v": "ok"}]')
+    project.write("features/login.feature", CSV_FEATURE.replace("read('data/values.csv')", "data/values.json"))
+    result = hive(project, "run", "--parallel", "-w", "2")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Examples: 0 inline, 0 from CSV, 1 from JSON" in result.stdout
+    assert "  - features/data/values.json" in result.stdout
+    assert "4 scenarios (4 passed)" in result.stdout
+
+
+def test_html_report_traces_json_scenarios_to_the_object_index(project):
+    project.write("features/data/values.json", '[{"v": "ok"}, {"v": "ok"}, {"v": "ok"}]')
+    project.write("features/login.feature", CSV_FEATURE.replace("read('data/values.csv')", "data/values.json"))
+    result = hive(project, "run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    page = (project.root / "report.html").read_text()
+    assert "features/data/values.json:1" in page and "features/data/values.json:3" in page
+    assert "values.json:0" not in page and "values.json:4" not in page
+
+
+def test_run_reports_a_bad_json_before_running_anything(project):
+    project.write("features/data/values.json", '[{"v": "ok"}, {"w": "x"}]')
+    project.write("features/login.feature", CSV_FEATURE.replace("read('data/values.csv')", "data/values.json"))
+    result = hive(project, "run")
+    assert result.returncode == 2
+    assert "values.json" in result.stderr and "missing key" in result.stderr
+
+
 def test_examples_summary_lists_a_shared_csv_once_for_two_tables(project):
     csv_project(project, rows=("ok",))
     project.write("features/second.feature", CSV_FEATURE.replace("Feature: Login", "Feature: Second"))

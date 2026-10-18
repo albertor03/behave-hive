@@ -1,0 +1,4 @@
+[
+  {"user": "admin", "password": "1234", "message": "Welcome"},
+  {"user": "other", "password": "wrong", "message": "Invalid credentials"}
+]

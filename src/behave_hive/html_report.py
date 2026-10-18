@@ -180,7 +180,7 @@ def _scenario(background: dict | None, scenario: dict) -> str:
     opened = " open" if ext["status"] in SEVERITY else ""
     source = ""
     if ext.get("source"):
-        source = f'<span class="source">{escape(ext["source"]["csv_path"])}:{ext["source"]["csv_row"]}</span>'
+        source = f'<span class="source">{escape(ext["source"]["data_path"])}:{ext["source"]["data_row"]}</span>'
     return (
         f'<details class="scenario" data-status="{status}" data-tags="{escape(" ".join(tags))}" '
         f'data-name="{escape(scenario["name"].lower())}"{opened}>'

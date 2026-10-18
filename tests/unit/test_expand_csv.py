@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from behave_hive.errors import CsvExamplesError
+from behave_hive.errors import ExamplesDataError
 from behave_hive.expand import read_csv_rows
 
 
@@ -12,8 +12,8 @@ def write(tmp_path: Path, content: bytes, name: str = "d.csv") -> Path:
     return path
 
 
-def err(path: Path) -> CsvExamplesError:
-    with pytest.raises(CsvExamplesError) as exc:
+def err(path: Path) -> ExamplesDataError:
+    with pytest.raises(ExamplesDataError) as exc:
         read_csv_rows(path, feature=Path("f.feature"), line=9)
     return exc.value
 
@@ -40,7 +40,7 @@ def test_csv_quoted_comma_and_pipe_are_kept(tmp_path):
 
 def test_csv_missing_file(tmp_path):
     e = err(tmp_path / "missing.csv")
-    assert e.csv_path == tmp_path / "missing.csv"
+    assert e.data_path == tmp_path / "missing.csv"
     assert (e.feature, e.line) == (Path("f.feature"), 9)
     assert "missing.csv" in str(e) and "f.feature" in str(e) and "line 9" in str(e)
 
@@ -57,27 +57,27 @@ def test_csv_without_data_rows(tmp_path, content):
 )
 def test_csv_empty_header(tmp_path, content):
     e = err(write(tmp_path, content))
-    assert e.csv_row == 1
+    assert e.data_row == 1
     assert "empty header" in str(e)
 
 
 @pytest.mark.parametrize("content", [b"v,v\n1,2\n", b"v, v\n1,2\n", b"v,v \n1,2\n"])
 def test_csv_duplicated_header_after_strip(tmp_path, content):
     e = err(write(tmp_path, content))
-    assert e.csv_row == 1
+    assert e.data_row == 1
     assert "duplicated header" in str(e)
 
 
 def test_csv_row_with_different_width_reports_row_number(tmp_path):
     e = err(write(tmp_path, b"a,b,c\n1,2,3\n4,5\n"))
-    assert e.csv_row == 3
+    assert e.data_row == 3
     assert "row 3" in str(e)
 
 
 @pytest.mark.parametrize("cell", [b"x\ny", b"x\ry"])
 def test_csv_cell_with_line_break_reports_row_number(tmp_path, cell):
     e = err(write(tmp_path, b'v\nok\n"' + cell + b'"\n'))
-    assert e.csv_row == 3
+    assert e.data_row == 3
     assert "line break" in str(e)
 
 
@@ -88,4 +88,9 @@ def test_csv_invalid_utf8(tmp_path):
 
 def test_csv_directory_is_unreadable(tmp_path):
     e = err(tmp_path)
-    assert e.csv_path == tmp_path
+    assert e.data_path == tmp_path
+
+
+def test_csv_field_over_the_parser_limit_is_a_data_error(tmp_path):
+    e = err(write(tmp_path, b"v\n" + b"x" * 200_000 + b"\n"))
+    assert "cannot read Examples CSV" in str(e)

@@ -5,13 +5,13 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/behave-hive)](https://pypi.org/project/behave-hive/)
 [![License](https://img.shields.io/github/license/albertor03/behave-hive)](https://github.com/albertor03/behave-hive/blob/main/LICENSE)
 
-Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read `Examples:` from CSV files and get Allure, Cucumber JSON and HTML reports in one run.
+Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read `Examples:` from CSV or JSON files and get Allure, Cucumber JSON and HTML reports in one run.
 
-- **Examples from CSV:** point an `Examples:` table at a file with its path, `| data/users.csv |`, or the equivalent `| read('data/users.csv') |`. CSV and hand-written tables can live in the same outline.
+- **Examples from CSV or JSON:** point an `Examples:` table at a file with its path, `| data/users.csv |` or `| data/users.json |`, or the equivalent `| read('data/users.csv') |`. CSV, JSON and hand-written tables can live in the same outline.
 - **Sequential or parallel runs:** set in the `[behave_hive]` section of `behave.ini`, or with `--parallel/--no-parallel`.
 - **Consolidated reports:** Allure results, standard Cucumber JSON and a self-contained HTML report with filters, metrics and screenshots.
 
-Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without CSV cells runs exactly as it does with behave. behave-hive complements behave; if you only need a parallel runner with its own report, [BehaveX](https://github.com/hrcorval/behavex) is another option.
+Your steps, your `environment.py` and the way you write features stay the same. A `.feature` without data-file cells runs exactly as it does with behave. behave-hive complements behave; if you only need a parallel runner with its own report, [BehaveX](https://github.com/hrcorval/behavex) is another option.
 
 **Contents:** [Installation](#installation) · [Quick start](#quick-start) · [Examples from CSV](#examples-from-csv) · [Running](#running) · [Configuration](#configuration) · [Reports](#reports) · [Examples](#examples) · [Limitations](#limitations) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Releasing](#releasing)
 
@@ -128,9 +128,31 @@ The CSV path is relative to the directory of the `.feature` file (subdirectories
 - Rejected, with exit code 2 and a message naming the `.feature`, the line, the CSV and the CSV row: no data rows, empty or duplicated headers (after stripping spaces), rows whose width differs from the header, cells with a line break, a missing file and invalid UTF-8.
 - Text inside `"""` or `'''` docstrings is never interpreted as `Examples:`.
 
+### Examples from JSON
+
+A `.json` path works exactly like a CSV one, as a plain path (the default) or inside `read(...)`:
+
+```gherkin
+    Examples:
+      | data/users.json |
+```
+
+`data/users.json` is an array of objects. The keys of the first object are the `<placeholders>`:
+
+```json
+[
+  {"user": "admin", "password": "1234", "message": "Welcome"},
+  {"user": "admin", "password": "wrong", "message": "Invalid credentials"}
+]
+```
+
+- UTF-8, with or without a BOM. The top level is a non-empty array and every element an object with the same keys as the first one (any order); keys are stripped of surrounding spaces and must not be empty or repeated.
+- A value is a string, a number, `true`, `false` or `null`. Strings go in as they are, numbers, `true` and `false` as JSON writes them, and `null` is an empty cell. A string with a line break, an object or an array is rejected.
+- Errors exit with code 2 and name the `.feature`, the line, the JSON file and the object (its 1-based position) or the line and column of a syntax error. The HTML report shows `path.json:N` next to each scenario, where `N` is that position.
+
 ### What behave-hive writes
 
-When a CSV table is present, the whole features root is copied to a working directory: `.feature` files are written expanded and every other file is a symlink to the original. `uri`s in the reports are the original ones; the HTML report shows `path.csv:row` next to each scenario. To see the result:
+When a CSV or JSON table is present, the whole features root is copied to a working directory: `.feature` files are written expanded and every other file is a symlink to the original. `uri`s in the reports are the original ones; the HTML report shows `path.csv:row` or `path.json:N` next to each scenario. To see the result:
 
 ```bash
 behave-hive expand features /tmp/expanded
@@ -314,6 +336,7 @@ behave features -f behave_hive.formatters.cucumber:CucumberJSONFormatter -o out.
 | [`features/login.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/login.feature) | CSV table, hand-written table and a table that fails on purpose (screenshot as evidence). |
 | [`features/csv/forms.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/forms.feature) | The plain path (the default form), `read('...')` with single and double quotes, and a shared file through `..`. |
 | [`features/csv/mixed_and_tagged.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/mixed_and_tagged.feature) | CSV (plain path and `read()`) and hand-written tables in one outline, each with its own tags. |
+| [`features/json/users.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/json/users.feature) | Examples read from JSON files: plain path, `read()`, next to a hand-written table, and numeric values. |
 | [`features/csv/special_characters.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/csv/special_characters.feature) | Pipes, commas and percent signs inside cells. |
 | [`features/structure/background_and_rule.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/structure/background_and_rule.feature) | `Background` and `Rule` with CSV `Examples:`. |
 | [`features/structure/step_data.feature`](https://github.com/albertor03/behave-hive/blob/main/example/features/structure/step_data.feature) | Step tables and docstrings, never read as `Examples:`. |
@@ -332,13 +355,13 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
 
 ## Limitations
 
-- **Lines in expanded features:** rows generated from a CSV, and everything after them in the file, report the lines of the expanded file. The `uri` is the original one and the HTML shows `csv:row`; files without CSV keep their lines.
+- **Lines in expanded features:** rows generated from a CSV or JSON file, and everything after them in the file, report the lines of the expanded file. The `uri` is the original one and the HTML shows `csv:row` or `json:N`; files without data tables keep their lines.
 - **`Path(__file__)` in steps:** steps run through symlinks in the expanded tree. Use `Path(__file__).resolve()` to reach files next to the original step.
 - **Unbalanced batches:** units are split into consecutive chunks. Use `chunk = 1` for dynamic balancing, at the cost of one process per unit.
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
 - **POSIX only (macOS and Linux):** the run lock uses `fcntl.flock`, interruption signals whole process groups (`os.killpg`) so browsers started by a step do not survive Ctrl+C, and the expanded copy of your features links every non-feature file with symlinks. None of these exist, or work without special privileges, on Windows. CI covers Linux and macOS only. WSL runs Linux and should work, but it is not tested.
-- **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV (JSON files are planned, see the [Roadmap](#roadmap)).
-- **CSV access is not sandboxed:** a feature may reference any CSV readable by the
+- **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV and JSON.
+- **Data file access is not sandboxed:** a feature may reference any CSV or JSON file readable by the
   current user, including paths with `..`; its rows can appear in reports.
 - **Retained run configuration:** `--keep-tmp` preserves private plans and
   locations, including `-D key=value` arguments. These files are owner-only
@@ -357,7 +380,6 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
 Next on the list:
 
 - **Windows support:** replace the POSIX-only pieces described under [Limitations](#limitations) (file lock, process groups and symlinks) and add Windows to CI.
-- **JSON data files:** read `Examples:` from a `.json` file, next to CSV, with the same plain-path form.
 
 ## Contributing
 
