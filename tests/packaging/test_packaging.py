@@ -52,9 +52,15 @@ def venv_executable(venv: Path, name: str) -> Path:
     return venv / "bin" / name
 
 
+def project_version() -> str:
+    import tomllib
+
+    return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+
+
 def check_installed(venv: Path, features: Path, tmp_path: Path) -> None:
     exe = venv_executable(venv, "behave-hive")
-    assert run(exe, "--version").stdout.strip() == "behave-hive 0.1.0"
+    assert run(exe, "--version").stdout.strip() == f"behave-hive {project_version()}"
     out = tmp_path / "expanded"
     run(exe, "expand", features, out)
     assert "| v |\n      | 1 |\n      | 2 |" in (out / "a.feature").read_text()
