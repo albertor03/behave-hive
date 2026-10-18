@@ -232,3 +232,35 @@ def test_posix_kill_group_ends_the_group_and_tolerates_a_finished_process(force)
         os.getpgid(proc.pid)
     assert pgid == proc.pid
     _kill_group(proc.pid, force)
+
+
+def _windows_process_alive(pid):
+    listing = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, check=False)
+    return str(pid) in listing.stdout
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Ctrl+Break is how Windows interrupts a console process group")
+def test_ctrl_break_integration_stops_everything_on_windows(make_project):
+    project = make_project()
+    project.write("features/steps/slow_steps.py", SLOW_STEPS)
+    project.write("features/slow.feature", FEATURE)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "behave_hive.cli", "run", "--parallel", "-w", "2", "--chunk", "2",
+         "--formats", "cucumber"],
+        cwd=project.root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **NEW_GROUP,
+    )
+    pids_dir = project.root / "pids"
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and len(list(pids_dir.glob("*"))) < 2:
+            time.sleep(0.05)
+        assert len(list(pids_dir.glob("*"))) == 2, "both slow scenarios should have started"
+        proc.send_signal(signal.CTRL_BREAK_EVENT)
+        output, _ = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    assert proc.returncode == 130, output
+    for pid in (int(p.name) for p in pids_dir.glob("*")):
+        assert not _windows_process_alive(pid)
