@@ -1,5 +1,10 @@
 # behave-hive
 
+[![CI](https://github.com/albertor03/behave-hive/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/albertor03/behave-hive/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/behave-hive)](https://pypi.org/project/behave-hive/)
+[![Python versions](https://img.shields.io/pypi/pyversions/behave-hive)](https://pypi.org/project/behave-hive/)
+[![License](https://img.shields.io/github/license/albertor03/behave-hive)](LICENSE)
+
 Run [behave](https://github.com/behave/behave) 1.3.x scenarios in parallel, read `Examples:` from CSV files and get Allure, Cucumber JSON and HTML reports in one run.
 
 - **Examples from CSV:** point an `Examples:` table at a file with its path, `| data/users.csv |`, or the equivalent `| read('data/users.csv') |`. CSV and hand-written tables can live in the same outline.
