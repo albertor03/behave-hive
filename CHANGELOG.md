@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+
+### Fixed
+
+- `behave-hive run --help` describes every option and lists the behave options that go after `--` (`--name`, `--include`, `--exclude`, `--dry-run`, `--stop`, `--no-capture`, tags and `-D`), the ones behave-hive controls and an example.
+
 ## [0.4.0] - 2026-11-09
 
 ### Added
