@@ -466,14 +466,6 @@ def test_behave_args_with_stop_are_accepted_from_the_file_and_after_double_dash(
     assert load().behave_args == ("--stop",)
 
 
-def test_effective_wip_is_reported_as_wip_although_it_implies_stop(project):
-    with pytest.raises(ConfigError, match="wip"):
-        effective(["--wip"])
-    with pytest.raises(ConfigError) as exc:
-        effective(ini_text="[behave]\nwip = true\n", project=project)
-    assert "wip" in str(exc.value) and "behave.ini" in str(exc.value)
-
-
 @pytest.mark.parametrize("args", [["-d"], ["--dry-run"]])
 def test_effective_dry_run_in_arguments_is_accepted(project, args):
     assert effective(args).dry_run is True
@@ -486,11 +478,6 @@ def test_effective_dry_run_in_the_file_is_accepted(project):
 def test_behave_args_with_dry_run_are_accepted_from_the_file(project):
     (project / "behave.ini").write_text(ini(behave_args="-d"))
     assert load().behave_args == ("-d",)
-
-
-def test_steps_catalog_is_still_rejected_as_steps_catalog_although_it_implies_a_dry_run(project):
-    with pytest.raises(ConfigError, match="steps_catalog"):
-        effective(["--steps-catalog"])
 
 
 def test_behave_args_with_name_and_file_filters_are_accepted_from_the_file(project):

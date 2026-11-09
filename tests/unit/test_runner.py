@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import stat
@@ -387,7 +388,7 @@ def test_stop_a_failing_batch_prevents_the_launch_of_the_pending_ones(tmp_path, 
 
 
 def test_stop_running_batches_finish_and_keep_their_results(tmp_path):
-    fake = Fake(by_batch={1: {"rc": 1, "scenarios": ("failed",), "hold": 0.02}, 2: {"hold": 0.3}})
+    fake = Fake(by_batch={1: {"rc": 1, "scenarios": ("failed",), "hold": 0.02}, 2: {"hold": 0.1}})
     result = execute(tmp_path, fake, [batch(i) for i in range(1, 5)], workers=2, stop_on_failure=True)
     assert len(fake.calls) == 2
     assert result.not_run == 2
@@ -521,18 +522,15 @@ def test_tee_output_reaches_the_console_while_the_batch_is_still_running(tmp_pat
                 pass
 
     monkeypatch.setattr(sys, "stdout", Console)
-    script = "import time; print('first'); time.sleep(1.5); print('second')"
+    script = "import time; print('first'); time.sleep(0.4); print('second')"
     run_real(tmp_path, script, tee=True)
     finished = time.monotonic()
     first_at = next(at for at, data in arrivals if b"first" in data)
-    assert finished - first_at >= 1.0, "the output was held back until the batch ended"
+    assert finished - first_at >= 0.25, "the output was held back until the batch ended"
 
 
 def test_tee_without_a_console_buffer_still_writes_the_log(tmp_path, monkeypatch):
-    import io
-
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     result = run_real(tmp_path, "print('only in the log')", tee=True)
     assert b"only in the log" in (tmp_path / "logs" / "batch-1.log").read_bytes()
     assert result.outcomes[0].error is None
-

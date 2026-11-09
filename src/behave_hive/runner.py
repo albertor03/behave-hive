@@ -254,7 +254,7 @@ def _write_html(cfg, report, summary, duration, run) -> None:
         raise HiveError(f"cannot write HTML report to {cfg.report_path}: {exc}") from None
 
 
-def _run_locked(cfg, roots, lang, results_dir, clock, argv, *, stop_on_failure=False, tee=False) -> int:
+def _run_locked(cfg, roots, lang, results_dir, clock, argv, *, stop_on_failure, tee) -> int:
     started, started_at = clock
     if "html" in cfg.formats:
         remove_stale_report(cfg.report_path)

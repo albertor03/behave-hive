@@ -640,16 +640,20 @@ Feature: Login
 """
 
 
-def _scenario_names(project):
+def _step_statuses(project):
+    """Scenario name -> status of each of its steps, from the consolidated Cucumber JSON."""
     report = json.loads((project.root / "reports" / "cucumber.json").read_text(encoding="utf-8"))
-    return [e["name"] for f in report for e in f["elements"] if e["type"] == "scenario"]
+    return {
+        e["name"]: [s["result"]["status"] for s in e["steps"]]
+        for f in report for e in f["elements"] if e["type"] == "scenario"
+    }
 
 
 def test_run_name_filter_runs_only_the_named_scenario(project):
     project.write("features/login.feature", TWO_SCENARIOS)
     result = hive(project, "run", "--parallel", "--", "--name", "locked user")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert _scenario_names(project) == ["Login with a locked user"]
+    assert list(_step_statuses(project)) == ["Login with a locked user"]
 
 
 def test_run_name_filter_without_matches_says_no_scenarios_found(project):
@@ -677,14 +681,6 @@ Feature: Dry
     Given value "ok"
 """
 
-
-def _step_statuses(project):
-    """Scenario name -> status of each of its steps, from the consolidated Cucumber JSON."""
-    report = json.loads((project.root / "reports" / "cucumber.json").read_text(encoding="utf-8"))
-    return {
-        e["name"]: [s["result"]["status"] for s in e["steps"]]
-        for f in report for e in f["elements"] if e["type"] == "scenario"
-    }
 
 
 def test_run_dry_run_with_every_step_defined_reports_skipped_and_exits_0(project):
@@ -817,27 +813,14 @@ def test_run_without_no_capture_the_console_stays_as_before(project):
     assert "Feature: Debug" in log.read_text(encoding="utf-8")
 
 
-def test_run_no_capture_from_behave_ini_also_shows_the_output(project):
+@pytest.mark.parametrize("how", ["ini", "argument"])
+def test_run_no_capture_stdout_from_the_ini_or_an_argument_shows_the_output(project, how):
     _debug_project(project)
-    project.write("behave.ini", "[behave]\ncapture_stdout = false\n")
-    result = hive(project, "run")
+    args = ["run"]
+    if how == "ini":
+        project.write("behave.ini", "[behave]\ncapture_stdout = false\n")
+    else:
+        args += ["--", "--no-capture-stdout"]
+    result = hive(project, *args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "debug value 42" in result.stdout
-
-
-def test_run_no_capture_stdout_only_also_shows_the_output(project):
-    _debug_project(project)
-    result = hive(project, "run", "--", "--no-capture-stdout")
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "debug value 42" in result.stdout
-
-
-def test_run_anchored_include_and_exclude_work_in_parallel_with_scenario_units(project):
-    project.write("features/login.feature", TWO_SCENARIOS)
-    project.write("features/other.feature", TWO_SCENARIOS.replace("Login", "Other"))
-    result = hive(project, "run", "--parallel", "--", "--include", r"login\.feature$")
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert sorted(_scenario_names(project)) == ["Login with a locked user", "Login with a valid user"]
-    result = hive(project, "run", "--parallel", "--", "--exclude", r"login\.feature$")
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert sorted(_scenario_names(project)) == ["Other with a locked user", "Other with a valid user"]

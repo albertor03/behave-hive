@@ -284,9 +284,8 @@ def _validate(values: dict[str, Any]) -> None:
     validate_behave_args(values["behave_args"])
 
 
-# (config attribute, key reported to the user, option strings) in the order they are checked.
-# behave turns `--wip` into a stop and `--steps-catalog` into a dry run; both of those are
-# accepted, so the user's option is the one reported.
+# (config attribute, key reported to the user, option strings). `--wip` implies a stop and
+# `--steps-catalog` a dry run; both are rejected under their own name.
 INCOMPATIBLE = (
     ("wip", "wip", ("-w", "--wip")),
     ("steps_catalog", "steps_catalog", ("--steps-catalog",)),

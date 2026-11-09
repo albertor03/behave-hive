@@ -193,7 +193,7 @@ class BatchPool:
                     return False
                 log = resources.enter_context(open(job.log_path, "wb"))
                 proc = self._launch(job, slot, log)
-                reader = self._start_reader(proc, log)
+            reader = self._start_reader(proc, log)
             started = time.monotonic()
             try:
                 outcome.returncode = proc.wait()
