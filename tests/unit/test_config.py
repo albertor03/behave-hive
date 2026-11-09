@@ -223,15 +223,6 @@ def test_precedence_extra_args_are_appended_after_behave_args(project):
         (["--runner", "x:Y"], "--runner"),
         (["--junit"], "--junit"),
         (["--junit-directory", "d"], "--junit-directory"),
-        (["--stop"], "--stop"),
-        (["-d"], "-d"),
-        (["--dry-run"], "--dry-run"),
-        (["-i", "x"], "-i"),
-        (["--include=x"], "--include"),
-        (["-e", "x"], "-e"),
-        (["--exclude", "x"], "--exclude"),
-        (["-n", "x"], "-n"),
-        (["--name=x"], "--name"),
         (["-w"], "-w"),
         (["--wip"], "--wip"),
     ],
@@ -265,6 +256,18 @@ def test_reserved_positional_says_paths_go_before_double_dash():
         ["--lang", "es"],
         ["--no-capture"],
         ["--no-skipped"],
+        ["--stop"],
+        ["-d"],
+        ["--dry-run"],
+        ["-n", "Login"],
+        ["--name=Login"],
+        ["--name", "Login"],
+        ["-i", "login"],
+        ["--include=login"],
+        ["--include", "login"],
+        ["-e", "slow"],
+        ["--exclude=slow"],
+        ["--exclude", "slow"],
         ["--color", "-v"],
         [],
     ],
@@ -275,10 +278,10 @@ def test_reserved_allowed_arguments_are_accepted(args):
 
 def test_reserved_arguments_from_the_file_and_after_double_dash_are_both_checked(project):
     (project / "behave.ini").write_text(ini(behave_args="-D a=1"))
-    with pytest.raises(ConfigError, match="--stop"):
-        load(extra=["--stop"])
-    (project / "behave.ini").write_text(ini(behave_args="--stop"))
-    with pytest.raises(ConfigError, match="--stop"):
+    with pytest.raises(ConfigError, match="--wip"):
+        load(extra=["--wip"])
+    (project / "behave.ini").write_text(ini(behave_args="--wip"))
+    with pytest.raises(ConfigError, match="--wip"):
         load()
 
 
@@ -404,14 +407,9 @@ def test_effective_plain_configuration_is_accepted(project):
 @pytest.mark.parametrize(
     "key, value",
     [
-        ("stop", "true"),
-        ("dry_run", "true"),
         ("steps_catalog", "true"),
         ("junit", "true"),
         ("wip", "true"),
-        ("name", "login"),
-        ("include_re", "login"),
-        ("exclude_re", "login"),
         ("stage", "staging"),
         ("runner", "my.module:Runner"),
     ],
@@ -428,13 +426,7 @@ def test_effective_incompatible_key_in_file_names_key_and_file(project, key, val
     [
         (["--steps-catalog"], "steps_catalog"),
         (["--junit"], "junit"),
-        (["--stop"], "stop"),
-        (["-d"], "dry_run"),
         (["-w"], "wip"),
-        (["-n", "x"], "name"),
-        (["--name=x"], "name"),
-        (["-i", "x"], "include"),
-        (["-e", "x"], "exclude"),
         (["--stage", "s"], "stage"),
         (["-r", "a:B"], "runner"),
     ],
@@ -448,6 +440,53 @@ def test_effective_incompatible_argument_names_key_and_origin(project, args, key
 
 @pytest.mark.parametrize(
     "args",
+    [["-n", "x"], ["--name=x"], ["-i", "x"], ["--include=x"], ["-e", "x"], ["--exclude=x"]],
+)
+def test_effective_name_and_file_filters_in_arguments_are_accepted(project, args):
+    effective(args)
+
+
+@pytest.mark.parametrize("key", ["name", "include_re", "exclude_re"])
+def test_effective_name_and_file_filters_in_the_file_are_accepted(project, key):
+    effective(ini_text=f"[behave]\n{key} = login\n", project=project)
+
+
+def test_effective_stop_in_arguments_is_accepted(project):
+    assert effective(["--stop"]).stop is True
+
+
+def test_effective_stop_in_the_file_is_accepted(project):
+    assert effective(ini_text="[behave]\nstop = true\n", project=project).stop is True
+
+
+def test_behave_args_with_stop_are_accepted_from_the_file_and_after_double_dash(project):
+    (project / "behave.ini").write_text(ini(behave_args="-D a=1"))
+    assert load(extra=["--stop"]).behave_args == ("-D", "a=1", "--stop")
+    (project / "behave.ini").write_text(ini(behave_args="--stop"))
+    assert load().behave_args == ("--stop",)
+
+
+@pytest.mark.parametrize("args", [["-d"], ["--dry-run"]])
+def test_effective_dry_run_in_arguments_is_accepted(project, args):
+    assert effective(args).dry_run is True
+
+
+def test_effective_dry_run_in_the_file_is_accepted(project):
+    assert effective(ini_text="[behave]\ndry_run = true\n", project=project).dry_run is True
+
+
+def test_behave_args_with_dry_run_are_accepted_from_the_file(project):
+    (project / "behave.ini").write_text(ini(behave_args="-d"))
+    assert load().behave_args == ("-d",)
+
+
+def test_behave_args_with_name_and_file_filters_are_accepted_from_the_file(project):
+    (project / "behave.ini").write_text(ini(behave_args="-n Login -i login -e slow"))
+    assert load().behave_args == ("-n", "Login", "-i", "login", "-e", "slow")
+
+
+@pytest.mark.parametrize(
+    "args",
     [["--version"], ["--tags-help"], ["--lang-list"], ["--lang-help", "es"], ["--lang", "help"]],
 )
 def test_effective_informational_options_are_rejected(project, args):
@@ -457,7 +496,7 @@ def test_effective_informational_options_are_rejected(project, args):
 
 def test_effective_argument_beats_file_in_the_reported_origin(project):
     with pytest.raises(ConfigError) as exc:
-        effective(["--stop"], ini_text="[behave]\nstop = true\n", project=project)
+        effective(["--wip"], ini_text="[behave]\nwip = true\n", project=project)
     assert "argument" in str(exc.value)
 
 

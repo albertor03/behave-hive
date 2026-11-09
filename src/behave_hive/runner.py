@@ -198,7 +198,11 @@ def run_suite(cfg: HiveConfig, *, keep_tmp: bool = False, argv: list[str] | None
     with results_lock(results_dir):
         clean_managed(results_dir)
         try:
-            return _run_locked(cfg, roots, lang, results_dir, (started, started_at), argv or [])
+            return _run_locked(
+                cfg, roots, lang, results_dir, (started, started_at), argv or [],
+                stop_on_failure=behave_config.stop and cfg.parallel,
+                tee=not cfg.parallel and not behave_config.capture_stdout,
+            )
         finally:
             if not keep_tmp:
                 remove_tmp(results_dir)
@@ -250,7 +254,7 @@ def _write_html(cfg, report, summary, duration, run) -> None:
         raise HiveError(f"cannot write HTML report to {cfg.report_path}: {exc}") from None
 
 
-def _run_locked(cfg, roots, lang, results_dir, clock, argv) -> int:
+def _run_locked(cfg, roots, lang, results_dir, clock, argv, *, stop_on_failure, tee) -> int:
     started, started_at = clock
     if "html" in cfg.formats:
         remove_stale_report(cfg.report_path)
@@ -274,7 +278,7 @@ def _run_locked(cfg, roots, lang, results_dir, clock, argv) -> int:
         batches, results_dir, list(cfg.behave_args), allure="allure" in cfg.formats,
         environment=environment,
     )
-    execution = execute_batches(jobs, workers)
+    execution = execute_batches(jobs, workers, stop_on_failure=stop_on_failure, tee=tee)
 
     report = merge(execution.partials, sources)
     if "cucumber" in cfg.formats:
@@ -287,6 +291,8 @@ def _run_locked(cfg, roots, lang, results_dir, clock, argv) -> int:
     print(format_summary(summary, duration))
     for outcome in execution.batch_errors:
         print(f"Batch {outcome.index} error: {outcome.error}")
+    if execution.not_run:
+        print(f"Stopped after the first failure: {execution.not_run} batches not run")
     if execution.interrupted:
         return 130
     return exit_code(summary, batch_errors=len(execution.batch_errors))
