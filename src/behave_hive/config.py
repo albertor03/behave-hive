@@ -41,8 +41,7 @@ RESERVED_OPTIONS = {
     "--junit": "use `formats` (JUnit is not supported)",
     "--junit-directory": "use `formats` (JUnit is not supported)",
 }
-UNSUPPORTED_OPTIONS = ("-d", "--dry-run", "--stop", "-i", "--include", "-e", "--exclude",
-                       "-n", "--name", "-w", "--wip")
+UNSUPPORTED_OPTIONS = ("-w", "--wip")
 
 
 @dataclass(frozen=True)
@@ -286,17 +285,12 @@ def _validate(values: dict[str, Any]) -> None:
 
 
 # (config attribute, key reported to the user, option strings) in the order they are checked.
-# `wip` goes before `stop` and `steps_catalog` before `dry_run`: behave turns `--wip` into a
-# stop and `--steps-catalog` into a dry run, and the user's option must be the one reported.
+# behave turns `--wip` into a stop and `--steps-catalog` into a dry run; both of those are
+# accepted, so the user's option is the one reported.
 INCOMPATIBLE = (
     ("wip", "wip", ("-w", "--wip")),
-    ("stop", "stop", ("--stop",)),
     ("steps_catalog", "steps_catalog", ("--steps-catalog",)),
-    ("dry_run", "dry_run", ("-d", "--dry-run")),
     ("junit", "junit", ("--junit",)),
-    ("name", "name", ("-n", "--name")),
-    ("include_re", "include_re", ("-i", "--include")),
-    ("exclude_re", "exclude_re", ("-e", "--exclude")),
     ("stage", "stage", ("--stage",)),
 )
 DEFAULT_RUNNER = "behave.runner:Runner"

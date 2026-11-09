@@ -194,3 +194,19 @@ def test_runs_the_rows_of_a_data_file_without_an_expanded_copy(project):
     statuses = sorted(s["steps"][0]["result"]["status"] for s in result_scenarios(project))
     assert statuses == ["failed", "passed", "passed"]
     assert path.read_text(encoding="utf-8") == text
+
+
+@pytest.mark.parametrize("args", [["--include", r"a\.feature$"], ["-e", r"zzz\.feature$"]])
+def test_file_patterns_are_applied_by_discovery_not_by_the_worker(project, args):
+    f = feature_path(project)
+    result = run_worker(project, write_plan(project, [f"{f}:7"], behave_args=args))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [s["line"] for s in result_scenarios(project)] == [7]
+
+
+def test_file_patterns_from_behave_ini_are_not_reapplied_by_the_worker(project):
+    (project.root / "behave.ini").write_text("[behave]\ninclude_re = a\\.feature$\n", encoding="utf-8")
+    f = feature_path(project)
+    result = run_worker(project, write_plan(project, [f"{f}:7"]))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [s["line"] for s in result_scenarios(project)] == [7]

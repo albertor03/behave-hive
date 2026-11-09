@@ -201,6 +201,23 @@ The same keys work in the configuration file (`parallel`, `workers`, `scheme`, `
 
 Exit codes: `0` all good, `1` a `failed`, `undefined` or `pending` scenario or a batch error, `2` usage, configuration or data file (CSV or JSON) error, `130` interrupted with Ctrl+C (or Ctrl+Break on Windows). When nothing matches, `No scenarios found` is printed and the exit code is 0.
 
+### Debugging a run
+
+These behave options work after `--` (or in `behave_args`, or in `[behave]`) and keep the reports:
+
+```bash
+behave-hive run -- --name "Login with a locked user"   # re-run one scenario (or outline row) by name
+behave-hive run -- --include login --exclude slow      # only the .feature files that match
+behave-hive run -- --stop                              # stop at the first failure
+behave-hive run -- --dry-run                           # check the steps without running them
+behave-hive run -- --no-capture                        # see what the steps print
+```
+
+- **`-n/--name`, `-i/--include`, `-e/--exclude`:** discovery applies them, so only the matching scenarios and `.feature` files are distributed and reported. A name that matches nothing prints `No scenarios found`. The patterns are regular expressions, as in behave, matched against the absolute path of each `.feature` (on Windows with backslashes), so anchor them at the end (`login\.feature$`) rather than the start.
+- **`-d/--dry-run`:** runs the normal pipeline without executing steps or hooks. The reports list every scenario as `skipped` and the steps without a definition as `undefined` (exit code 1, as in behave).
+- **`--stop`:** stops at the first failing scenario. In sequential mode that is behave's own behavior, and the rest of that feature is reported as `skipped`. In parallel mode each process stops at its first failure; once a batch fails (or has an infrastructure error) no pending batch is launched, the batches already running finish and are reported, and the console prints `Stopped after the first failure: <n> batches not run`. The exit code is 1.
+- **`--no-capture`** (and `--no-capture-stdout`): in sequential mode the output of behave, including what the steps `print`, is shown on the console while it runs, and is also saved to `results_dir/logs/batch-<n>.log`. In parallel mode the processes would interleave, so it goes only to the logs.
+
 ## Configuration
 
 Put a `[behave_hive]` section next to `[behave]` in `behave.ini`, `.behaverc`, `setup.cfg` or `tox.ini`, or a `[tool.behave_hive]` table in `pyproject.toml`. Files are looked up in the working directory in that order and the first one with the section wins. behave ignores the section.
@@ -247,9 +264,9 @@ These are rejected, in `behave_args` and after `--`, with exit code 2:
 
 - positional arguments and `@file`s (paths go before `--`);
 - `-f/--format`, `-o/--outfile`, `-r/--runner`, `--junit`, `--junit-directory`;
-- `-d/--dry-run`, `--stop`, `-i/--include`, `-e/--exclude`, `-n/--name`, `-w/--wip`.
+- `-w/--wip`.
 
-The same applies to the *effective* behave configuration: `stop`, `dry_run`, `steps_catalog`, `junit`, `wip`, name filters, `include`/`exclude`, `stage` and a custom runner in `[behave]` are rejected, and so are `--version`, `--tags-help`, `--lang-list` and `--lang-help`. `format` and `outfiles` from `[behave]` are ignored.
+The options for [debugging a run](#debugging-a-run) are accepted. The same applies to the *effective* behave configuration: `steps_catalog`, `junit`, `wip`, `stage` and a custom runner in `[behave]` are rejected, and so are `--version`, `--tags-help`, `--lang-list` and `--lang-help`. `format` and `outfiles` from `[behave]` are ignored.
 
 ### Worker identification
 
@@ -359,7 +376,7 @@ Gherkin in other languages works too: the `Examples:` keyword follows the featur
 - **Unbalanced batches:** units are split into consecutive chunks. Use `chunk = 1` for dynamic balancing, at the cost of one process per unit.
 - **`allure-behave` is pinned to 2.16.2**, because the Allure formatter relies on its internals.
 - **Windows:** supported, tested in CI on Python 3.11 to 3.14. Ctrl+C (or Ctrl+Break) stops the run: it asks each batch to stop with Ctrl+Break and, after a grace period, ends its whole process tree so browsers started by a step do not survive. Owner-only permissions on the run files (`0600`/`0700`) apply to macOS and Linux; on Windows they keep the default permissions of the results directory.
-- **Not supported:** `--stop`, `--dry-run`, `--include`, `--exclude`, `--name`, `--wip`, retries, and data sources other than CSV and JSON.
+- **Not supported:** `--wip`, retries, and data sources other than CSV and JSON.
 - **Data file access is not sandboxed:** a feature may reference any CSV or JSON file readable by the
   current user, including paths with `..`; its rows can appear in reports.
 - **Retained run configuration:** `--keep-tmp` preserves private plans and

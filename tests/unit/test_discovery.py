@@ -91,8 +91,8 @@ def test_units_csv_rows_become_units_without_a_copy_of_the_feature(project):
 
 def test_units_reject_incompatible_behave_configuration(project):
     a = project.write("features/a.feature", OUTLINE)
-    with pytest.raises(ConfigError, match="stop"):
-        discover([a], args=["--stop"])
+    with pytest.raises(ConfigError, match="wip"):
+        discover([a], args=["--wip"])
 
 
 # --- 4.2 filter and effective configuration -------------------------------------
@@ -187,3 +187,101 @@ def test_setup_teardown_in_a_feature_that_does_not_run_is_ignored(project):
     a = project.write("features/a.feature", SETUP.replace("Scenario: test", "@other\n  Scenario: test"))
     b = project.write("features/b.feature", OUTLINE).resolve()
     assert len(discover([a, b], args=["--tags=@smoke"], scheme="scenario", parallel=True)) == 3
+
+
+# --- name and include/exclude filters ---------------------------------------------
+
+NAMES = """\
+Feature: F
+  Scenario: Login with a locked user
+    Given value "ok"
+
+  Scenario: Login with a valid user
+    Given value "ok"
+
+  Scenario Outline: Login as <role>
+    Given value "<role>"
+
+    Examples:
+      | role  |
+      | admin |
+      | guest |
+"""
+
+
+def test_name_filter_keeps_only_matching_scenarios(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    assert discover([a], args=["--name", "locked user"]) == [Unit(a, 2)]
+
+
+def test_name_filter_picks_one_outline_row(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    assert discover([a], args=["-n", "Login as admin"]) == [Unit(a, 13)]
+
+
+def test_name_filter_accepts_the_equals_form_and_matches_several(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    assert discover([a], args=["--name=valid|locked"]) == [Unit(a, 2), Unit(a, 5)]
+
+
+def test_name_filter_with_feature_scheme_keeps_features_with_a_match(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    b = project.write("features/b.feature", OUTLINE).resolve()
+    assert discover([a, b], args=["--name", "locked user"], scheme="feature") == [Unit(a, None)]
+
+
+def test_name_filter_in_sequential_mode_keeps_the_feature_unit(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    assert discover([a], args=["--name", "locked user"], parallel=False) == [Unit(a, None)]
+
+
+def test_name_filter_without_matches_gives_no_units(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    assert discover([a], args=["--name", "does not exist"]) == []
+
+
+def test_name_filter_combines_with_tags(project):
+    a = project.write("features/a.feature", OUTLINE).resolve()
+    assert discover([a], args=["--tags=@smoke", "--name", "plain"]) == []
+    assert len(discover([a], args=["--tags=@smoke", "--name", "O"])) == 3
+
+
+def test_name_filter_from_behave_ini(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    (project.root / "behave.ini").write_text("[behave]\nname = locked user\n")
+    assert discover([a]) == [Unit(a, 2)]
+
+
+def test_include_and_exclude_filter_feature_files(project):
+    login = project.write("features/login.feature", NAMES).resolve()
+    project.write("features/login_slow.feature", NAMES)
+    project.write("features/cart.feature", NAMES)
+    units = discover([project.features], args=["--include", r"login\.feature|login_slow", "--exclude", "slow"],
+                     scheme="feature")
+    assert units == [Unit(login, None)]
+
+
+def test_include_keeps_only_matching_files(project):
+    project.write("features/login.feature", NAMES)
+    cart = project.write("features/cart.feature", NAMES).resolve()
+    assert discover([project.features], args=["-i", r"cart\.feature"], scheme="feature") == [Unit(cart, None)]
+
+
+def test_exclude_everything_gives_no_units(project):
+    project.write("features/a.feature", NAMES)
+    assert discover([project.features], args=["-e", r"a\.feature"]) == []
+
+
+def test_setup_teardown_guard_still_applies_with_a_name_filter(project):
+    a = project.write("features/a.feature", SETUP)
+    with pytest.raises(ConfigError, match="scheme = feature"):
+        discover([a], args=["--name", "test"], scheme="scenario", parallel=True)
+
+
+def test_file_patterns_are_matched_against_the_feature_path_even_with_scenario_units(project):
+    a = project.write("features/a.feature", NAMES).resolve()
+    project.write("features/b.feature", NAMES)
+    units = discover([project.features], args=["--include", r"a\.feature$"])
+    assert units and {u.path for u in units} == {a}
+    assert all(u.line is not None for u in units)
+    assert discover([project.features], args=["--exclude", r"\.feature$"]) == []
