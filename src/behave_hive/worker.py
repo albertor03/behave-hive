@@ -37,6 +37,10 @@ def run_plan(plan: dict) -> int:
         print(f"{exc.__class__.__name__}: {exc}", file=sys.stderr)
         return 1
 
+    # Discovery already applied -i/-e to each feature path. behave would match them again against
+    # "path:line", which an anchored pattern (`\.feature$`) never matches.
+    config.include_re = config.exclude_re = None
+
     formats = [CUCUMBER]
     outputs = [StreamOpener(plan["cucumber_out"])]
     if plan.get("allure_dir"):

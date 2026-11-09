@@ -1,6 +1,9 @@
+import io
 import json
 import os
 import stat
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -77,9 +80,10 @@ def test_command_line_stays_short_with_5000_units(tmp_path):
 class Fake:
     """A fake `Popen` that writes the batch result when waited on."""
 
-    def __init__(self, rc=0, scenarios=("passed",), hold=0.0, write_json=True, allure_files=()):
+    def __init__(self, rc=0, scenarios=("passed",), hold=0.0, write_json=True, allure_files=(), by_batch=None):
         self.rc, self.scenarios, self.hold = rc, scenarios, hold
         self.write_json, self.allure_files = write_json, allure_files
+        self.by_batch = by_batch or {}  # batch index -> {"rc", "scenarios", "hold", "write_json"} overrides
         self.lock = threading.Lock()
         self.active: dict[int, int] = {}
         self.max_active = 0
@@ -104,11 +108,13 @@ class FakeProc:
         self.fake, self.pid, self.plan, self.returncode = fake, pid, plan, None
 
     def wait(self, timeout=None):
-        time.sleep(self.fake.hold)
-        if self.fake.write_json:
+        index = int(Path(self.plan["cucumber_out"]).stem.split("-")[1])
+        own = self.fake.by_batch.get(index, {})
+        time.sleep(own.get("hold", self.fake.hold))
+        if own.get("write_json", self.fake.write_json):
             elements = [
                 {"type": "scenario", "id": f"f;s{i}", "line": i + 1, "x-behave-hive": {"status": s}}
-                for i, s in enumerate(self.fake.scenarios)
+                for i, s in enumerate(own.get("scenarios", self.fake.scenarios))
             ]
             partial = json.dumps([{"uri": "u", "elements": elements}])
             Path(self.plan["cucumber_out"]).write_text(partial, encoding="utf-8")
@@ -119,7 +125,7 @@ class FakeProc:
                 (allure_dir / name).write_text("{}")
         with self.fake.lock:
             self.fake.active.pop(self.pid, None)
-        self.returncode = self.fake.rc
+        self.returncode = own.get("rc", self.fake.rc)
         return self.returncode
 
     def poll(self):
@@ -364,3 +370,167 @@ def test_stale_report_cleanup_ignores_unreadable_files(tmp_path):
     finally:
         report.chmod(0o600)
     assert report.exists()
+
+
+# --- stop on first failure -------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", ["failed", "undefined", "pending"])
+def test_stop_a_failing_batch_prevents_the_launch_of_the_pending_ones(tmp_path, status):
+    fake = Fake(by_batch={1: {"rc": 1, "scenarios": (status,)}})
+    result = execute(tmp_path, fake, [batch(i) for i in range(1, 5)], workers=1, stop_on_failure=True)
+    assert len(fake.calls) == 1
+    assert result.not_run == 3
+    skipped = [o for o in result.outcomes if o.not_run]
+    assert [o.index for o in skipped] == [2, 3, 4]
+    assert all(not o.interrupted and o.error is None for o in skipped)
+    assert len(result.partials) == 1 and not result.interrupted
+
+
+def test_stop_running_batches_finish_and_keep_their_results(tmp_path):
+    fake = Fake(by_batch={1: {"rc": 1, "scenarios": ("failed",), "hold": 0.02}, 2: {"hold": 0.1}})
+    result = execute(tmp_path, fake, [batch(i) for i in range(1, 5)], workers=2, stop_on_failure=True)
+    assert len(fake.calls) == 2
+    assert result.not_run == 2
+    assert len(result.partials) == 2
+    assert [o.scenarios for o in result.outcomes if not o.not_run] == [1, 1]
+
+
+def test_stop_a_batch_error_also_stops_the_launch(tmp_path):
+    fake = Fake(by_batch={1: {"rc": 1, "write_json": False}})
+    result = execute(tmp_path, fake, [batch(i) for i in range(1, 4)], workers=1, stop_on_failure=True)
+    assert len(fake.calls) == 1
+    assert result.not_run == 2
+    assert len(result.batch_errors) == 1
+
+
+def test_stop_without_failures_runs_every_batch(tmp_path):
+    fake = Fake()
+    result = execute(tmp_path, fake, [batch(i) for i in range(1, 5)], workers=1, stop_on_failure=True)
+    assert len(fake.calls) == 4
+    assert result.not_run == 0
+
+
+def test_without_stop_a_failing_batch_does_not_prevent_later_launches(tmp_path):
+    fake = Fake(by_batch={1: {"rc": 1, "scenarios": ("failed",)}})
+    result = execute(tmp_path, fake, [batch(i) for i in range(1, 5)], workers=1)
+    assert len(fake.calls) == 4
+    assert result.not_run == 0
+
+
+# --- live output (tee) -----------------------------------------------------------
+
+PASSED_PARTIAL = json.dumps(
+    [{"uri": "u", "elements": [{"type": "scenario", "id": "f;s", "line": 1, "x-behave-hive": {"status": "passed"}}]}]
+)
+
+
+def real_child(script, write_result=True):
+    """A `popen` that ignores the worker command and runs `python -c script` with the pool's streams."""
+
+    def popen(command, **kwargs):
+        plan = json.loads(Path(command[-1]).read_text(encoding="utf-8"))
+        if write_result:
+            Path(plan["cucumber_out"]).write_text(PASSED_PARTIAL, encoding="utf-8")
+        return subprocess.Popen([sys.executable, "-c", script], **kwargs)
+
+    return popen
+
+
+def run_real(tmp_path, script, **kwargs):
+    jobs = jobs_for(tmp_path, [batch(1)])
+    return execute_batches(
+        jobs, 1, cwd=tmp_path, echo=lambda line: None, popen=real_child(script), **kwargs
+    )
+
+
+def test_tee_shows_the_output_on_the_console_and_keeps_it_in_the_log(tmp_path, capsysbinary):
+    script = "import sys; print('debug value 42', flush=True); print('on stderr', file=sys.stderr)"
+    result = run_real(tmp_path, script, tee=True)
+    console = capsysbinary.readouterr().out
+    log = (tmp_path / "logs" / "batch-1.log").read_bytes()
+    assert b"debug value 42" in console and b"on stderr" in console
+    assert console == log
+    assert result.outcomes[0].error is None
+
+
+def test_tee_copies_bytes_untouched(tmp_path, capsysbinary):
+    script = "import sys; sys.stdout.buffer.write('caf\u00e9 \u2713\\n'.encode('utf-8') + b'\\xff\\n')"
+    run_real(tmp_path, script, tee=True)
+    expected = "caf\u00e9 \u2713\n".encode("utf-8") + b"\xff\n"
+    assert capsysbinary.readouterr().out == expected
+    assert (tmp_path / "logs" / "batch-1.log").read_bytes() == expected
+
+
+def test_without_tee_the_console_gets_nothing_and_the_log_has_the_output(tmp_path, capsysbinary):
+    run_real(tmp_path, "print('only in the log')")
+    assert capsysbinary.readouterr().out == b""
+    assert b"only in the log" in (tmp_path / "logs" / "batch-1.log").read_bytes()
+
+
+def test_tee_keeps_logging_and_draining_when_the_console_is_closed(tmp_path, monkeypatch):
+    class ClosedConsole:
+        class buffer:
+            @staticmethod
+            def write(data):
+                raise BrokenPipeError
+
+            @staticmethod
+            def flush():
+                raise BrokenPipeError
+
+    monkeypatch.setattr(sys, "stdout", ClosedConsole)
+    script = "import sys; sys.stdout.buffer.write(b'y' * 300000)"
+    result = run_real(tmp_path, script, tee=True)
+    assert (tmp_path / "logs" / "batch-1.log").read_bytes() == b"y" * 300000
+    assert result.outcomes[0].error is None
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the interrupt is simulated with a POSIX process group")
+def test_tee_run_ends_cleanly_when_interrupted(tmp_path, capsysbinary):
+    script = "import time; print('started', flush=True); time.sleep(60)"
+    log = tmp_path / "logs" / "batch-1.log"
+
+    def interrupt_once_started(futures, timeout=None):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and b"started" not in (log.read_bytes() if log.exists() else b""):
+            time.sleep(0.02)
+        raise KeyboardInterrupt
+
+    jobs = jobs_for(tmp_path, [batch(1)])
+    started = time.monotonic()
+    result = execute_batches(
+        jobs, 1, cwd=tmp_path, echo=lambda line: None, popen=real_child(script, write_result=False),
+        wait=interrupt_once_started, grace=2, tee=True,
+    )
+    assert result.interrupted is True
+    assert time.monotonic() - started < 15
+    assert b"started" in capsysbinary.readouterr().out
+
+
+def test_tee_output_reaches_the_console_while_the_batch_is_still_running(tmp_path, monkeypatch):
+    arrivals = []
+
+    class Console:
+        class buffer:
+            @staticmethod
+            def write(data):
+                arrivals.append((time.monotonic(), data))
+
+            @staticmethod
+            def flush():
+                pass
+
+    monkeypatch.setattr(sys, "stdout", Console)
+    script = "import time; print('first'); time.sleep(0.4); print('second')"
+    run_real(tmp_path, script, tee=True)
+    finished = time.monotonic()
+    first_at = next(at for at, data in arrivals if b"first" in data)
+    assert finished - first_at >= 0.25, "the output was held back until the batch ended"
+
+
+def test_tee_without_a_console_buffer_still_writes_the_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    result = run_real(tmp_path, "print('only in the log')", tee=True)
+    assert b"only in the log" in (tmp_path / "logs" / "batch-1.log").read_bytes()
+    assert result.outcomes[0].error is None

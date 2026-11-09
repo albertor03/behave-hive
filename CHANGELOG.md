@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-09
+
+### Added
+
+- `-n/--name`, `-i/--include` and `-e/--exclude` are accepted after `--`, in `behave_args` and in `[behave]`. Discovery applies them, so a single failed scenario can be re-run by name and a name that matches nothing prints `No scenarios found`.
+- `-d/--dry-run` is accepted: the reports show the scenarios as `skipped` and the steps without a definition as `undefined`, and no step or hook runs. `--steps-catalog` is still rejected.
+- `--stop` is accepted. In parallel mode, once a batch fails no pending batch is launched; running batches finish and are reported, and the console prints `Stopped after the first failure: <n> batches not run`.
+- **Sequential `--no-capture`:** the behave output, including what the steps print, is shown on the console while the batch runs, and it is still saved to the batch log. Parallel runs keep it only in the logs.
+
+
 ## [0.3.1] - 2026-10-18
 
 ### Fixed

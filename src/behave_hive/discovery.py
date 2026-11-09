@@ -28,7 +28,7 @@ class Unit:
 
 
 def discover_units(inputs: list[Path], behave_args: list[str], *, scheme: str, parallel: bool) -> list[Unit]:
-    """Units of the features under `inputs` that match the effective tag expression.
+    """Units of the features under `inputs` that match the effective tags, names and file patterns.
 
     Uses the same effective configuration the behave workers build (D3/D4).
     """
@@ -38,12 +38,17 @@ def discover_units(inputs: list[Path], behave_args: list[str], *, scheme: str, p
 
     units: list[Unit] = []
     for path in feature_files(inputs):
+        if config.exclude(str(path)):
+            continue
         try:
             feature = parse_expanded(str(path), language=config.lang)
         except ParserError as exc:
             raise HiveError(f"cannot parse {path}: {exc}") from None
         scenarios = list(feature.walk_scenarios())
-        selected = [s for s in scenarios if s.should_run_with_tags(config.tag_expression)]
+        selected = [
+            s for s in scenarios
+            if s.should_run_with_tags(config.tag_expression) and s.should_run_with_name_select(config)
+        ]
         if not selected:
             continue
         if per_scenario:

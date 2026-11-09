@@ -42,6 +42,7 @@ The commands assume the environment is active; otherwise prefix them with `uv ru
 
 ```bash
 behave-hive expand features /tmp/expanded    # the features with every CSV and JSON table written out
+behave-hive run -- --name "<scenario name>"   # re-run one scenario (or outline row) by name
 ```
 
 From a checkout of this repository you can use the local code instead: `uv pip install -e "..[allure,playwright]"`.

@@ -626,3 +626,201 @@ def test_run_warns_that_work_dir_is_deprecated_only_when_it_is_configured(projec
     assert result.returncode == 0, result.stdout + result.stderr
     assert "behave-hive: warning: work_dir is deprecated and ignored" in result.stderr
     assert not (project.root / ".hive").exists()
+
+
+# --- name filter ----------------------------------------------------------------
+
+TWO_SCENARIOS = """\
+Feature: Login
+  Scenario: Login with a locked user
+    Given value "ok"
+
+  Scenario: Login with a valid user
+    Given value "ok"
+"""
+
+
+def _step_statuses(project):
+    """Scenario name -> status of each of its steps, from the consolidated Cucumber JSON."""
+    report = json.loads((project.root / "reports" / "cucumber.json").read_text(encoding="utf-8"))
+    return {
+        e["name"]: [s["result"]["status"] for s in e["steps"]]
+        for f in report for e in f["elements"] if e["type"] == "scenario"
+    }
+
+
+def test_run_name_filter_runs_only_the_named_scenario(project):
+    project.write("features/login.feature", TWO_SCENARIOS)
+    result = hive(project, "run", "--parallel", "--", "--name", "locked user")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list(_step_statuses(project)) == ["Login with a locked user"]
+
+
+def test_run_name_filter_without_matches_says_no_scenarios_found(project):
+    project.write("features/login.feature", TWO_SCENARIOS)
+    result = hive(project, "run", "--", "--name", "does not exist")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No scenarios found" in result.stdout
+    assert not (project.root / "reports" / "cucumber.json").exists()
+
+
+# --- dry run --------------------------------------------------------------------
+
+DRY_FEATURE = """\
+Feature: Dry
+  Scenario: first
+    Given value "ok"
+
+  Scenario: second
+    Given value "ok"
+
+  Scenario: third
+    Given value "ok"
+
+  Scenario: fourth
+    Given value "ok"
+"""
+
+
+
+def test_run_dry_run_with_every_step_defined_reports_skipped_and_exits_0(project):
+    project.write("features/dry.feature", DRY_FEATURE)
+    project.write("features/environment.py", 'def before_all(context):\n    print("HOOK-RAN")\n')
+    result = hive(project, "run", "--", "--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list(_step_statuses(project).values()) == [["skipped"]] * 4
+    assert "HOOK-RAN" not in (project.root / "reports" / "logs" / "batch-1.log").read_text(encoding="utf-8")
+    assert not re.search(r"Batch \d+ error", result.stdout)
+
+
+def test_run_dry_run_with_an_undefined_step_exits_1_without_a_batch_error(project):
+    project.write("features/dry.feature", DRY_FEATURE + '\n  Scenario: fifth\n    Given nothing defines this\n')
+    result = hive(project, "run", "--parallel", "-w", "2", "--", "--dry-run")
+    assert result.returncode == 1, result.stdout + result.stderr
+    statuses = _step_statuses(project)
+    assert statuses["fifth"] == ["undefined"]
+    assert statuses["first"] == ["skipped"]
+    assert not re.search(r"Batch \d+ error", result.stdout)
+
+
+def test_run_dry_run_writes_the_allure_results(project):
+    pytest.importorskip("allure_behave")
+    project.write("features/dry.feature", DRY_FEATURE)
+    result = hive(project, "run", "--formats", "allure,cucumber", "--", "-d")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list((project.root / "reports" / "allure-results").glob("*-result.json"))
+
+
+# --- stop on first failure ------------------------------------------------------
+
+STOP_FEATURE = """\
+Feature: Stop
+  Scenario: first
+    Given value "bad"
+
+  Scenario: second
+    Given value "ok"
+
+  Scenario: third
+    Given value "ok"
+
+  Scenario: fourth
+    Given value "ok"
+"""
+
+
+def test_run_stop_in_sequential_mode_leaves_the_rest_of_the_feature_unexecuted(project):
+    project.write("features/stop.feature", STOP_FEATURE)
+    result = hive(project, "run", "--", "--stop")
+    assert result.returncode == 1, result.stdout + result.stderr
+    statuses = _step_statuses(project)
+    assert statuses["first"] == ["failed"]
+    assert all(statuses[name] == ["skipped"] for name in ("second", "third", "fourth"))
+    assert "batches not run" not in result.stdout
+
+
+def test_run_stop_in_parallel_mode_does_not_launch_the_pending_batches(project):
+    project.write("features/stop.feature", STOP_FEATURE)
+    result = hive(project, "run", "--parallel", "-w", "1", "--chunk", "1", "--", "--stop")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Stopped after the first failure: 3 batches not run" in result.stdout
+    assert list(_step_statuses(project)) == ["first"]
+    assert sorted(p.name for p in (project.root / "reports" / "logs").iterdir()) == ["batch-1.log"]
+
+
+def test_run_stop_in_parallel_mode_without_failures_runs_everything(project):
+    project.write("features/stop.feature", STOP_FEATURE.replace('"bad"', '"ok"'))
+    result = hive(project, "run", "--parallel", "-w", "1", "--chunk", "1", "--", "--stop")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Stopped after" not in result.stdout
+    assert len(_step_statuses(project)) == 4
+
+
+def test_run_stop_in_parallel_mode_names_the_batch_error(project):
+    project.write("features/stop.feature", STOP_FEATURE)
+    project.write("features/environment.py", "def before_all(context):\n    raise RuntimeError('boom')\n")
+    result = hive(project, "run", "--parallel", "-w", "1", "--chunk", "2", "--", "--stop")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert re.search(r"Batch 1 error", result.stdout)
+    assert "Stopped after the first failure: 1 batches not run" in result.stdout
+
+
+# --- live output with --no-capture ------------------------------------------------
+
+DEBUG_FEATURE = """\
+Feature: Debug
+  Scenario: prints
+    Given I print a debug value
+"""
+
+DEBUG_STEP = """\
+from behave import given
+
+
+@given("I print a debug value")
+def step_print(context):
+    print("debug value 42")
+"""
+
+
+def _debug_project(project):
+    project.write("features/debug.feature", DEBUG_FEATURE)
+    project.write("features/steps/debug_steps.py", DEBUG_STEP)
+    return project.root / "reports" / "logs" / "batch-1.log"
+
+
+def test_run_no_capture_in_sequential_mode_shows_the_output_before_the_batch_line_and_logs_it(project):
+    log = _debug_project(project)
+    result = hive(project, "run", "--", "--no-capture")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.index("debug value 42") < result.stdout.index("batch 1 ·")
+    assert "debug value 42" in log.read_text(encoding="utf-8")
+
+
+def test_run_no_capture_in_parallel_mode_writes_the_output_only_to_the_log(project):
+    log = _debug_project(project)
+    result = hive(project, "run", "--parallel", "--", "--no-capture")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "debug value 42" not in result.stdout
+    assert "debug value 42" in log.read_text(encoding="utf-8")
+
+
+def test_run_without_no_capture_the_console_stays_as_before(project):
+    log = _debug_project(project)
+    result = hive(project, "run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "debug value 42" not in result.stdout and "Feature: Debug" not in result.stdout
+    assert "Feature: Debug" in log.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("how", ["ini", "argument"])
+def test_run_no_capture_stdout_from_the_ini_or_an_argument_shows_the_output(project, how):
+    _debug_project(project)
+    args = ["run"]
+    if how == "ini":
+        project.write("behave.ini", "[behave]\ncapture_stdout = false\n")
+    else:
+        args += ["--", "--no-capture-stdout"]
+    result = hive(project, *args)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "debug value 42" in result.stdout
