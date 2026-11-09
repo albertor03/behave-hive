@@ -824,3 +824,44 @@ def test_run_no_capture_stdout_from_the_ini_or_an_argument_shows_the_output(proj
     result = hive(project, *args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "debug value 42" in result.stdout
+
+
+# --- --help ---------------------------------------------------------------------
+
+OPTIONS_WITH_A_VALUE = ("-n", "--name", "-i", "--include", "-e", "--exclude")
+BEHAVE_OPTIONS_IN_HELP = (*OPTIONS_WITH_A_VALUE, "-d", "--dry-run", "--stop", "--no-capture")
+
+
+def _run_help(project):
+    result = hive(project, "run", "--help")
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout
+
+
+def test_run_help_describes_every_option(project):
+    from behave_hive.cli import build_parser
+
+    run = next(a for a in build_parser()._subparsers._group_actions[0].choices.values() if a.prog.endswith(" run"))
+    missing = [a.option_strings for a in run._actions if a.option_strings and not a.help]
+    assert missing == []
+
+
+def test_run_help_lists_the_behave_options_that_go_after_double_dash(project):
+    text = _run_help(project)
+    assert "--" in text and "go to behave" in text
+    for option in BEHAVE_OPTIONS_IN_HELP:
+        assert option in text, option
+    assert "behave-hive run --parallel -- --name" in text
+
+
+def test_run_help_names_what_behave_hive_controls(project):
+    text = _run_help(project)
+    for option in ("-f", "-o", "-r", "--junit", "--wip"):
+        assert option in text.split("not allowed", 1)[1], option
+
+
+@pytest.mark.parametrize("option", BEHAVE_OPTIONS_IN_HELP)
+def test_every_option_listed_in_the_help_is_accepted(option):
+    from behave_hive.config import validate_behave_args
+
+    validate_behave_args([option, "x"] if option in OPTIONS_WITH_A_VALUE else [option])
